@@ -38,10 +38,10 @@ import numpy as np
 import requests
 from PIL import Image
 from transformers import AutoProcessor,AutoModel, AutoConfig, AutoTokenizer, TrainingArguments , HfArgumentParser
-from extern.blip2.modeling_blip_2 import Blip2ModelQuerryLearning
-from extern.blip2.processing_blip_2 import Blip2Processor
+#from extern.blip2.modeling_blip_2 import Blip2ModelQuerryLearning
+#from extern.blip2.processing_blip_2 import Blip2Processor
 from transformers import BertTokenizer, BertModel,BertLMHeadModel,MT5Tokenizer
-from extern.blip2.modeling_bert_generation   import BertGenerationDecoder
+#from extern.blip2.modeling_bert_generation   import BertGenerationDecoder
 from transformers import  GPTQConfig
 
 ## DSI QG
