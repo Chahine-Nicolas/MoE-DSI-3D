@@ -1,7 +1,24 @@
 
 # Experts training
 
+Experts training is defined with :
 
+```highlight
+job_train_lhd.slurm
+```
+
+inside main_80_20.py
+
+you will need to affect sub_part = True for a MoE-DSI-3D expert training or sub_part = False for a DSI-3D training 
+
+For expert training, you will need to set train_indices_path and val_indices_path to the corresponding area (A, B, C, D, and E).
+example :
+
+```highlight
+train_indices_path = "id_zone_A_dsi_train_list.json"
+val_indices_path = "id_zone_A_dsi_val_list.json"
+eval_indices_path = "id_zone_A_dsi_eval_list.json"
+```
 
 # Gate training
 
