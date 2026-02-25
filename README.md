@@ -1,5 +1,12 @@
 
+
+
 # Experts training
+Set the path to your dataset in kitti_lhd_hilbert.yaml
+
+```highlight
+DATA_PATH = ../lidarhd_east
+```
 
 Experts training is defined with :
 
