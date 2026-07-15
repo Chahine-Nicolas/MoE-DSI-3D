@@ -1,5 +1,14 @@
+## Overview
+
+**MoE-DSI-3D** is an adaptation of Mixture-of-Experts (MoE) architecture to our [DSI-3D model](https://github.com/Chahine-Nicolas/DSI-3D/tree/main)
+
+![plot](https://github.com/Chahine-Nicolas/DSI-3D/blob/main/architecture.png?raw=true)
 
 
+# NEWS
+
+[2026-02] code release
+[2026-07] Model weights
 
 # Experts training
 Set the path to your dataset in kitti_lhd_hilbert.yaml
