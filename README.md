@@ -2,7 +2,7 @@
 
 **MoE-DSI-3D** is an adaptation of Mixture-of-Experts (MoE) architecture to our [DSI-3D model](https://github.com/Chahine-Nicolas/DSI-3D/tree/main)
 
-![plot](https://github.com/Chahine-Nicolas/MoE-DSI-3D/blob/main/__assets__/graph_abstractv2.pdf?raw=true)
+![plot](https://github.com/Chahine-Nicolas/MoE-DSI-3D/blob/main/__assets__/img/moe2.PNG?raw=true)
 
 
 # NEWS
