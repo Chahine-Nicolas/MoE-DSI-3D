@@ -7,12 +7,15 @@
 
 # NEWS
 
-[2026-02] code release
-[2026-07] Model weights
+- [2026-02] code release
+- [2026-07] Model weights
 
 # MoE-DSI-3D Checkpoint
 
 [Download here](https://huggingface.co/Chahine-Nicolas/MoE-DSI-3D/tree/main)
+
+git_hilbert_A0.zip
+
 
 # Experts training
 Set the path to your dataset in kitti_lhd_hilbert.yaml
