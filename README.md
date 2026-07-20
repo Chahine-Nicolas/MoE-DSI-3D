@@ -7,14 +7,48 @@
 
 # NEWS
 
-- [2026-02] code release
+- [2026-02] Code release
 - [2026-07] Model weights
 
 # MoE-DSI-3D Checkpoint
 
 [Download here](https://huggingface.co/Chahine-Nicolas/MoE-DSI-3D/tree/main)
 
-git_hilbert_A0.zip
+### Paris_East Experts
+
+| Expert | File |
+|--------|------|
+| A | `git_hilbert_A0.zip` |
+| B | `git_hilbert_B0.zip` |
+| C | `git_hilbert_C0.zip` |
+| D | `git_hilbert_D0.zip` |
+
+### Paris_West Experts
+
+| Expert | File |
+|--------|------|
+| A | `git_hilbert_A1.zip` |
+| B | `git_hilbert_B1.zip` |
+| C | `git_hilbert_C1.zip` |
+| D | `git_hilbert_D1.zip` |
+| E | `git_hilbert_E1.zip` |
+
+**`Gate_Model.zip`:** 
+Contents:
+
+| Model | Description |
+|-------|-------------|
+| `gate_east` | Routes inputs to the Paris_East experts. |
+| `gate_west` | Routes inputs to the Paris_West experts. |
+| `gate_east_west` | Selects between the Paris_East and Paris_West expert groups. |
+
+Fine-tuned LoGG3D-Net on **LiDAR HD**.
+- `LoGG3D-Net (Re-trained on LHD).zip`
+
+## Tokenizer
+
+Tokenizer vocabulary optimized for Hilbert-curve indexing of LiDAR HD.
+- `transformers_vocab.zip`
 
 
 # Experts training
