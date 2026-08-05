@@ -166,3 +166,16 @@ python main_80_20.py \
        --warmup_steps 100 \
        --lr_scheduler_type "linear" \
        --logging_steps 1 #> out_${MODEL_NAME}.txt 2>&1
+
+# --lr_scheduler_type "cosine_with_restarts" \
+#       --fix_random_seed 666 \
+#
+#       --use_sop True \
+#       --use_sop False \
+#       --cfg_file ./config_loggnet_cross_eval.yaml \
+#       --resume_from_checkpoint ${WORK}/out/dsi/checkpoint-300/ \
+
+# python -m pdb preprocess_datasets.py \
+#        --launcher none \
+#        --cfg_file ./config_loggnet_cross_eval.yaml \
+#        --workers 1 \

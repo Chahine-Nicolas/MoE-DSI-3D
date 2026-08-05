@@ -1,16 +1,16 @@
 #!/bin/bash                                                                   
-#SBATCH --partition=gpu_p13                                                  
+#SBATCH --partition=gpu_p2                                                   
 #SBATCH --nodes=1                                                               
 #SBATCH --ntasks-per-node=1    
-#SBATCH --qos=qos_gpu-t4             
-#SBATCH --time=100:00:00                                 
+#SBATCH --qos=qos_gpu-t3                  
+#SBATCH --time=20:00:00                                 
 #SBATCH --gres=gpu:1                                                           
 #SBATCH --cpus-per-task=10                                                    
 #SBATCH --hint nomultithread                                                    
-#SBATCH --mail-user user@mail.com                          
-#SBATCH --job-name=train_ouest                      
-#SBATCH --output=train_full_train_ouest.out                  
-#SBATCH --error=train_full_train_ouest.err                        
+#SBATCH --mail-user user@mail.com                      
+#SBATCH --job-name=train_moe_est         # new                        
+#SBATCH --output=train_full_train_moe_est.out                      # new                        
+#SBATCH --error=train_full_train_moe_est.err                        
 
 # chargement des modules                                                        
 module purge                        # new                                       
@@ -23,7 +23,6 @@ export MASTER_NODE=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n1)
 
 ## Change
 export LOG3DNET_DIR=LoGG3D_Net_code_path
-
 
 ## Model
 #MODEL_NAME=blip2
@@ -49,11 +48,11 @@ DATASET_LEN=-1
 
 
 ## Eval
-EVAL_STEP=500
+EVAL_STEP=100
 BATCH_SIZE_EVAL=64
 
 ## Train
-BATCH_SIZE_TRAIN=256
+BATCH_SIZE_TRAIN=512
 NUM_TRAIN_EPOCH=100
 
 #LABEL_MODE="gps"
@@ -62,11 +61,10 @@ LABEL_MODE="hilbert"
 #LABEL_MODE="hierarchical"
 
 
-EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_train_ouest"
+EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_train_moe_est"
 ID_MAX_LENGTH=10
 
 RESUME_CHECKPOINT="False"
-
 
 EVAL_CHECKPOINT="../checkpoints/${EXTRA_TAG}/"
 #EVAL_CHECKPOINT="False"
@@ -93,13 +91,13 @@ fi
 
 case ${MODEL_NAME} in
     "git")
-	BATCH_SIZE_TRAIN=512
-	BATCH_SIZE_EVAL=64
+	BATCH_SIZE_TRAIN=32
+	BATCH_SIZE_EVAL=32
 	
 	ADAM_EPSILON=1e-05
 	ADAM_BETA1=0.90
 	ADAM_BETA2=0.999
-	LEARNING_RATE=5e-04
+	LEARNING_RATE=1e-05
 	SAVE_STEPS=100
         ;;                                                                                           
     "blip2")
@@ -129,10 +127,11 @@ export 'PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512'
 
 
 
-python main_80_20.py \
+#python  -m pdb  main.py \
+python main_moe_trainer.py \
        --launcher none \
        --cfg_file ${CONFIG_NAME} \
-       --save_hit_file hit_scores.txt \
+       --save_hit_file hit_train_moe_est.txt \
        --workers 1 \
        --model_name ${MODEL_NAME} \
        --dataset_train_len ${DATASET_LEN} \
@@ -166,3 +165,16 @@ python main_80_20.py \
        --warmup_steps 100 \
        --lr_scheduler_type "linear" \
        --logging_steps 1 #> out_${MODEL_NAME}.txt 2>&1
+
+# --lr_scheduler_type "cosine_with_restarts" \
+#       --fix_random_seed 666 \
+#
+#       --use_sop True \
+#       --use_sop False \
+#       --cfg_file ./config_loggnet_cross_eval.yaml \
+#       --resume_from_checkpoint ${WORK}/out/dsi/checkpoint-300/ \
+
+# python -m pdb preprocess_datasets.py \
+#        --launcher none \
+#        --cfg_file ./config_loggnet_cross_eval.yaml \
+#        --workers 1 \
