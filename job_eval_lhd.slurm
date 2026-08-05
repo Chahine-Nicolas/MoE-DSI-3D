@@ -7,22 +7,22 @@
 #SBATCH --gres=gpu:1                                                           
 #SBATCH --cpus-per-task=4                                                    
 #SBATCH --hint nomultithread                                                    
-#SBATCH --mail-user chahine-nicolas.zede@ign.fr                          
-#SBATCH --job-name=eval_zone_ouest_save_dict        # new                        
-#SBATCH --output=file_job_eval_zone_ouest_save_dict.out                      # new                        
-#SBATCH --error=file_job_eval_zone_ouest_save_dict.err                        
+#SBATCH --mail-user user@mail.com                          
+#SBATCH --job-name=eval_zone_ouest                             
+#SBATCH --output=file_job_eval_zone_ouest.out                 
+#SBATCH --error=file_job_eval_zone_ouest.err                        
 
 # chargement des modules                                                        
 module purge                        # new                                       
 module load anaconda-py3/2023.03
 conda activate sandbox
 
-export PYTHONUSERBASE=/lustre/fsn1/worksf/projects/rech/dki/ujo91el/envs/conda/sandbox
+export PYTHONUSERBASE=env_path
 export MASTER_NODE=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n1)
  
 
 ## Change
-export LOG3DNET_DIR='/lustre/fswork/projects/rech/dki/ujo91el/code/these_place_reco/LoGG3D-Net/'
+export LOG3DNET_DIR=LoGG3D_Net_code_path
 
 ## Model
 #MODEL_NAME=blip2
@@ -45,7 +45,6 @@ DO_PREPROCESS_ID=False
 
 ## Dataset_len
 DATASET_LEN=-1
-#DATASET_LEN=4512 #-1 #512
 #DATASET_LEN=512
 #DATASET_LEN=256
 
@@ -64,18 +63,18 @@ LABEL_MODE="hilbert"
 #LABEL_MODE="hierarchical"
 
 
-EXTRA_TAG="git_hilbert_lhd_long_indx_zone_ouest_save_dict"
+EXTRA_TAG="git_hilbert_lhd_long_indx_zone_ouest"
 
 TRAINER_CHECKPOINT="False"
 
 
-EVAL_CHECKPOINT="/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/${EXTRA_TAG}/"
-#EVAL_CHECKPOINT="False"s
+EVAL_CHECKPOINT="../checkpoints/${EXTRA_TAG}/"
+#EVAL_CHECKPOINT="False"
 
 eval_chkt="checkpoint-6300" #lhd
 
 
-CHECKPOINT=/gpfswork/rech/dki/ujo91el/code/dsi-pc/ckpts/gd_mae_finetune_kitti.pth 
+CHECKPOINT=../ckpts/gd_mae_finetune_kitti.pth 
 
 ## ========== Config  ========
 CONFIG_NAME=config_lhd_${LABEL_MODE}.yaml
@@ -139,7 +138,7 @@ export 'PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512'
 python main_80_20.py \
        --launcher none \
        --cfg_file ${CONFIG_NAME} \
-       --save_hit_file hit_eval_zone_ouest_save_dict.txt \
+       --save_hit_file hit_scores.txt \
        --workers 1 \
        --model_name ${MODEL_NAME} \
        --dataset_train_len ${DATASET_LEN} \

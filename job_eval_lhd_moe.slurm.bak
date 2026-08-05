@@ -120,7 +120,7 @@ export 'PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512'
 python main_moe_trainer_west.py \
        --launcher none \
        --cfg_file ${CONFIG_NAME} \
-       --save_hit_file hit_scores.txt \
+       --save_hit_file hit_eval_zone_moe_ouest_save_dict3.txt \
        --workers 1 \
        --model_name ${MODEL_NAME} \
        --dataset_train_len ${DATASET_LEN} \

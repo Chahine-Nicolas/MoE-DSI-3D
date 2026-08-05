@@ -3,14 +3,14 @@
 #SBATCH --nodes=1                                                               
 #SBATCH --ntasks-per-node=1    
 #SBATCH --qos=qos_gpu-t4                  
-#SBATCH --time=60:00:00                                 
+#SBATCH --time=80:00:00                                 
 #SBATCH --gres=gpu:1                                                           
 #SBATCH --cpus-per-task=4                                                    
 #SBATCH --hint nomultithread                                                    
-#SBATCH --mail-user user@mail.com                        
-#SBATCH --job-name=eval_zone_ouest_moe                        
-#SBATCH --output=job_eval_zone_ouest_moe.out                       
-#SBATCH --error=job_eval_zone_ouest_moe.err                        
+#SBATCH --mail-user user@mail.com                         
+#SBATCH --job-name=eval_zone_est_moe
+#SBATCH --output=job_eval_zone_est_moe.out             
+#SBATCH --error=job_eval_zone_est_moe.err                        
 
 # chargement des modules                                                        
 module purge                        # new                                       
@@ -59,7 +59,7 @@ LABEL_MODE="hilbert"
 #LABEL_MODE="label"
 #LABEL_MODE="hierarchical"
 
-EXTRA_TAG="git_hilbert_lhd_long_indx_zone_moe_ouest"
+EXTRA_TAG="git_hilbert_lhd_long_indx_zone_est_moe"
 
 TRAINER_CHECKPOINT="False"
 
@@ -117,10 +117,10 @@ esac
 export 'PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512'
 
 
-python main_moe_trainer_west.py \
+python main_moe_trainer.py \
        --launcher none \
        --cfg_file ${CONFIG_NAME} \
-       --save_hit_file hit_scores.txt \
+       --save_hit_scores.txt \
        --workers 1 \
        --model_name ${MODEL_NAME} \
        --dataset_train_len ${DATASET_LEN} \
