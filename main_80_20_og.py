@@ -741,7 +741,6 @@ def main():
         
     ### ========= build Models ===========
     work_path = os.getenv('WORKSF')
-    #/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/transformers
 
     model_paths = {
         "git_base": os.path.join(work_path, "datas/transformers/git-base-lhd"),
@@ -1202,16 +1201,10 @@ def main():
                 id_max_length=ID_MAX_LENGTH
             ) 
 
-        #previous_model_path = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_beam10_rerun_linear/checkpoint-4600"
-        #previous_model_path = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_beam10_voc300_linear_256_64val7/checkpoint-2100"
-        
-        previous_model_path = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_ouest_v4/checkpoint-2000"
-        #previous_model_path = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_ouest_v3/checkpoint-11500"
 
         if not os.path.isdir(previous_model_path) :
             if args.local_rank == 0 :
                 print("train from scratch : ")
-            #trainer.train(resume_from_checkpoint="/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/transformers/git-base-coco/")
             trainer.train()
             is_training = True
         else :

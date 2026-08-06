@@ -1,7 +1,7 @@
 DATASET: 'LHD_dataset'
-#DATASET: 'KittiDataset_2012'
+
 SEQ: ''
-DATA_PATH: '/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/lidarhd_v3' # $WORKSF
+DATA_PATH: 'lidarhd_path'
 
 BACKEND: &BACKEND
   NAME: HardDiskBackend

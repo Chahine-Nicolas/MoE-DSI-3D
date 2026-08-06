@@ -107,14 +107,14 @@ data_arg.add_argument('--eval_feature_distance', type=str,
 data_arg.add_argument("--pnv_preprocessing", type=str2bool,
                       default=False, help="Preprocessing in dataloader for PNV.")
 
-data_arg.add_argument('--kitti_dir', type=str, default='../datasets/',help="Path to the KITTI odometry dataset")
+data_arg.add_argument('--kitti_dir', type=str, default='/gpfswork/rech/dki/ujo91el/datas/datasets/',help="Path to the KITTI odometry dataset")
 data_arg.add_argument('--kitti_data_split', type=dict, default={
     'train': [0, 1, 2, 3, 4, 5, 6, 7, 9, 10],
     'val': [],
     'test': [8]
 })
 
-data_arg.add_argument('--mulran_dir', type=str,default='../mulran/', help="Path to the MulRan dataset")
+data_arg.add_argument('--mulran_dir', type=str,default='/gpfswork/rech/dki/ujo91el/datas/mulran/', help="Path to the MulRan dataset")
 
 data_arg.add_argument("--mulran_normalize_intensity", type=str2bool,default=False, help="Normalize intensity return.")
 
@@ -204,10 +204,10 @@ def load_timestamps(file_name):
 eval_seq = 6
 eval_seq = '%02d' % eval_seq
 
-kitti_infos = glob.glob("../datasets/sequences/"+eval_seq +"/velodyne/*.bin")
+kitti_infos = glob.glob("/gpfswork/rech/dki/ujo91el/datas/datasets/sequences/"+eval_seq +"/velodyne/*.bin")
 
 
-sequence_path = '../datasets/sequences/'+eval_seq+'/'
+sequence_path = '/gpfswork/rech/dki/ujo91el/datas/datasets/sequences/'+eval_seq+'/'
 #poses
 _, positions_database = load_poses_from_txt(
         sequence_path + 'poses.txt')
@@ -221,7 +221,7 @@ timestamps = load_timestamps(sequence_path + 'times.txt')
 revisit_criteria = 3
 skip_time = 30
 
-revisit_json_dir = '../logg3dnet/config/kitti_tuples/'
+revisit_json_dir = '/gpfswork/rech/dki/ujo91el/code/logg3dnet/config/kitti_tuples/'
 revisit_json_file = 'is_revisit_D-{}_T-{}.json'.format(int(revisit_criteria), int(skip_time))
 revisit_json = json.load(open(revisit_json_dir + revisit_json_file, "r"))
 

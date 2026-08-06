@@ -1084,16 +1084,16 @@ def main():
 
         
 
-    checkpoint_paths = ["/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
-                        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_B0/checkpoint-7200/pytorch_model.bin",
-                        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_C02/checkpoint-7000/pytorch_model.bin",
-                        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_DO2/checkpoint-1400/pytorch_model.bin"
+    checkpoint_paths = ["../checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
+                        "../checkpoints/git_hilbert_train_B0/checkpoint-7200/pytorch_model.bin",
+                        "../checkpoints/git_hilbert_train_C02/checkpoint-7000/pytorch_model.bin",
+                        "../checkpoints/git_hilbert_train_DO2/checkpoint-1400/pytorch_model.bin"
                        ]
     """
-    checkpoint_paths = ["/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
-                        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
-                        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
-                        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
+    checkpoint_paths = ["../checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
+                        "../checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
+                        "../checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
+                        "../checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
                        ] # sae result if gate free or 1,1,1,1
     
     """

@@ -728,7 +728,6 @@ def main():
         
     ### ========= build Models ===========
     work_path = os.getenv('WORKSF')
-    #/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/transformers
 
     model_paths = {
         "git_base": os.path.join(work_path, "datas/transformers/git-base-coco"),
@@ -1050,11 +1049,11 @@ def main():
         f.close()
                                   
         import pdb; pdb.set_trace()
-        checkpoint_paths = ["/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_lhd_long_indx_zone_A0_1m/checkpoint-3200/pytorch_model.bin",
-                            "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_lhd_long_indx_zone_B0_1m/checkpoint-5000/pytorch_model.bin",
-                            "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_lhd_long_indx_zone_C0_1m/checkpoint-4000/pytorch_model.bin",
-                            "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_lhd_long_indx_zone_D0_1m/checkpoint-1600/pytorch_model.bin",
-                            "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_lhd_long_indx_zone_D0_1m/checkpoint-1500/pytorch_model.bin",
+        checkpoint_paths = ["../checkpoints/git_hilbert_lhd_long_indx_zone_A0_1m/checkpoint-3200/pytorch_model.bin",
+                            "../checkpoints/git_hilbert_lhd_long_indx_zone_B0_1m/checkpoint-5000/pytorch_model.bin",
+                            "../checkpoints/git_hilbert_lhd_long_indx_zone_C0_1m/checkpoint-4000/pytorch_model.bin",
+                            "../checkpoints/git_hilbert_lhd_long_indx_zone_D0_1m/checkpoint-1600/pytorch_model.bin",
+                            "../checkpoints/git_hilbert_lhd_long_indx_zone_D0_1m/checkpoint-1500/pytorch_model.bin",
                            ]
         
         transformer_list = []

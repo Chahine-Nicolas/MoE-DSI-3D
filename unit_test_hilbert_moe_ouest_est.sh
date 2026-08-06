@@ -1,5 +1,5 @@
 ## Change
-export LOG3DNET_DIR='/lustre/fswork/projects/rech/dki/ujo91el/code/these_place_reco/LoGG3D-Net/'
+export LOG3DNET_DIR='../LoGG3D-Net/'
 
 ## Model
 #MODEL_NAME=blip2
@@ -55,8 +55,8 @@ EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_seq_02_80_20_contrast_quad_hilbert"
 TRAINER_CHECKPOINT="False"
 
 
-EVAL_CHECKPOINT="/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/${EXTRA_TAG}/"
-#EVAL_CHECKPOINT="False"s
+EVAL_CHECKPOINT="../checkpoints/${EXTRA_TAG}/"
+
 
 eval_chkt="checkpoint-7300" #00
 eval_chkt="checkpoint-9200" #02
@@ -65,8 +65,8 @@ eval_chkt="checkpoint-9200" #02
 #eval_chkt="checkpoint-2700" #07
 #eval_chkt="checkpoint-7600" #08
 
-#CHECKPOINT=ckpts/gd_mae_pretrain_kitti.pth
-CHECKPOINT=/gpfswork/rech/dki/ujo91el/code/dsi-pc/ckpts/gd_mae_finetune_kitti.pth 
+
+CHECKPOINT=ckpts/gd_mae_pretrain_kitti.pth
 
 ## ========== Config  ========
 #CONFIG_NAME=config_loggnet_${LABEL_MODE}.yaml

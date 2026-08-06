@@ -728,7 +728,6 @@ def main():
         
     ### ========= build Models ===========
     work_path = os.getenv('WORKSF')
-    #/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/transformers
 
     model_paths = {
         "git_base": os.path.join(work_path, "datas/transformers/git-base-lhd"),
@@ -1049,10 +1048,10 @@ def main():
         val_indices = json.load(f)
         f.close()
                                   
-        checkpoint_paths = ["/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
-                            "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_B0/checkpoint-7200/pytorch_model.bin",
-                            "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_C0/checkpoint-5900/pytorch_model.bin",
-                            "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_D0/checkpoint-6100/pytorch_model.bin",
+        checkpoint_paths = ["../checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
+                            "../checkpoints/git_hilbert_train_B0/checkpoint-7200/pytorch_model.bin",
+                            "../checkpoints/git_hilbert_new_tokenizer_C0/checkpoint-5900/pytorch_model.bin",
+                            "../checkpoints/git_hilbert_new_tokenizer_D0/checkpoint-6100/pytorch_model.bin",
                            ]
 
         

@@ -33,7 +33,7 @@ BATCH_SIZE_EVAL=1
 
 ## Train
 BATCH_SIZE_TRAIN=2
-NUM_TRAIN_EPOCH=10000
+NUM_TRAIN_EPOCH=100
 
 #LABEL_MODE="gps"
 LABEL_MODE="hilbert"
@@ -46,7 +46,7 @@ LABEL_MODE="hilbert"
 # EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_seq_22_80_20_contrast_quad_hilbert_suite_16600"
 
 EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_seq_00_80_20_contrast_quad_hilbert"
-#EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_seq_02_80_20_contrast_quad_hilbert"
+EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_seq_02_80_20_contrast_quad_hilbert"
 #EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_seq_05_80_20_contrast_quad_hilbert"
 #EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_seq_06_80_20_contrast_quad_hilbert"
 #EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_seq_07_80_20_contrast_quad_hilbert"
@@ -56,21 +56,23 @@ TRAINER_CHECKPOINT="False"
 
 
 EVAL_CHECKPOINT="../checkpoints/${EXTRA_TAG}/"
-
+#EVAL_CHECKPOINT="False"s
 
 eval_chkt="checkpoint-7300" #00
-#eval_chkt="checkpoint-9200" #02
+eval_chkt="checkpoint-9200" #02
 #eval_chkt="checkpoint-8300" #05
 #eval_chkt="checkpoint-1800" #06
 #eval_chkt="checkpoint-2700" #07
 #eval_chkt="checkpoint-7600" #08
 
-
 CHECKPOINT=ckpts/gd_mae_pretrain_kitti.pth
 
 ## ========== Config  ========
+#CONFIG_NAME=config_loggnet_${LABEL_MODE}.yaml
 CONFIG_NAME=config_lhd_${LABEL_MODE}.yaml
-#EXTRA_TAG="train"
+
+
+# EXTRA_TAG="train"
 
 
 ID_MAX_LENGTH=10
@@ -78,7 +80,7 @@ ID_MAX_LENGTH=10
 
 if [ "${DO_PREPROCESS}" = "True" ]; then
     DATASET_LEN=-1    
-    BATCH_SIZE_TRAIN=2    
+    BATCH_SIZE_TRAIN=1
     BATCH_SIZE_EVAL=1
     NUM_TRAIN_EPOCH=1000
     EVAL_STEP=20
@@ -92,8 +94,8 @@ fi
 
 case ${MODEL_NAME} in
     "git")
-	BATCH_SIZE_TRAIN=1
-	BATCH_SIZE_EVAL=1
+	BATCH_SIZE_TRAIN=2
+	BATCH_SIZE_EVAL=64
 	
 	ADAM_EPSILON=1e-05
 	ADAM_BETA1=0.90
@@ -126,10 +128,12 @@ export 'PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512'
 # 	   --workers 1
 # fi
 
-python -m pdb main_80_20_ouest_est.py\
+
+#python  -m pdb  main.py \
+python -m pdb main_moe_trainer.py \
        --launcher none \
        --cfg_file ${CONFIG_NAME} \
-       --save_hit_file hit_scores_temp.txt \
+       --save_hit_file hit_train_asuppr.txt \
        --workers 1 \
        --model_name ${MODEL_NAME} \
        --dataset_train_len ${DATASET_LEN} \

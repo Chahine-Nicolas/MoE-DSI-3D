@@ -1,5 +1,5 @@
 ## Change
-export LOG3DNET_DIR='/lustre/fswork/projects/rech/dki/ujo91el/code/these_place_reco/LoGG3D-Net/'
+export LOG3DNET_DIR='../LoGG3D-Net/'
 
 ## Model
 #MODEL_NAME=blip2
@@ -45,26 +45,16 @@ LABEL_MODE="hilbert"
 # EXTRA_TAG="pos1_norm1"
 # EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_seq_22_80_20_contrast_quad_hilbert_suite_16600"
 
-#EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_seq_00_80_20_contrast_quad_hilbert"
-
-#EXTRA_TAG="git_hilbert_lhd" # 900
-#EXTRA_TAG="git_hilbert_lhd_long_indx_shuffle"
-EXTRA_TAG="git_hilbert_lhd_long_indx_zone_A0_p20_extd0_linear"
-
-#TRAINER_CHECKPOINT="/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_lhd_long_indx_shuffle/checkpoint-1400"
-TRAINER_CHECKPOINT="/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_lhd_long_indx_zone_A0_p20_extd0_linear/checkpoint-1300"
+EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_seq_00_80_20_contrast_quad_hilbert"
 
 
+#TRAINER_CHECKPOINT="../checkpoints/git_hilbert_lhd_long_indx_shuffle/checkpoint-1400"
 
-
-
-EVAL_CHECKPOINT="/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/${EXTRA_TAG}/"
-#EVAL_CHECKPOINT="False"s
+EVAL_CHECKPOINT="../checkpoints/${EXTRA_TAG}/"
 
 eval_chkt="checkpoint-5000" #lhd
 
-#CHECKPOINT=ckpts/gd_mae_pretrain_kitti.pth
-CHECKPOINT=/gpfswork/rech/dki/ujo91el/code/dsi-pc/ckpts/gd_mae_finetune_kitti.pth 
+CHECKPOINT=ckpts/gd_mae_pretrain_kitti.pth
 
 ## ========== Config  ========
 CONFIG_NAME=config_lhd_${LABEL_MODE}.yaml
@@ -129,7 +119,7 @@ export 'PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512'
 python -m pdb main_80_20.py \
        --launcher none \
        --cfg_file ${CONFIG_NAME} \
-       --save_hit_file hit_train_asuppr.txt \
+       --save_hit_file hit_scores_temp.txt \
        --workers 1 \
        --model_name ${MODEL_NAME} \
        --dataset_train_len ${DATASET_LEN} \

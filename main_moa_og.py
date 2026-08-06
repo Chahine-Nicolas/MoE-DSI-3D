@@ -1047,10 +1047,10 @@ def main():
     # -----------------------------
     # Replace these checkpoint paths with your actual .bin/config directories
     checkpoint_paths = [
-        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
-        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_B0/checkpoint-7200/pytorch_model.bin",
-        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_C0/checkpoint-5900/pytorch_model.bin",
-        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_D0/checkpoint-6100/pytorch_model.bin",
+        "../checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
+        "../checkpoints/git_hilbert_train_B0/checkpoint-7200/pytorch_model.bin",
+        "../checkpoints/git_hilbert_new_tokenizer_C0/checkpoint-5900/pytorch_model.bin",
+        "../checkpoints/git_hilbert_new_tokenizer_D0/checkpoint-6100/pytorch_model.bin",
     ]
     
     # If your experts are GitForCausalLM instances, pass that class as model_class to loader.

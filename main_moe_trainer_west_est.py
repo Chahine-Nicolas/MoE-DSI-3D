@@ -656,8 +656,8 @@ def main():
     if args.local_rank == 0 :
         logger.info("Initializing dataset and dataloader...")
         
-    root_path1 = "/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/lidarhd_v3"
-    root_path2 = "/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/lidarhd_v2"
+    root_path1 = "lidarhd_WEST_path"
+    root_path2 = "lidarhd_EAST_path"
     
     cfg['DATA_CONFIG']['DATA_PATH'] = root_path1
     #train_set, train_loader, _ = initialize_dataloader(cfg, args, logger, training=True)
@@ -1109,15 +1109,15 @@ def main():
 
 
     checkpoint_paths = [
-                    "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_A1/checkpoint-4100/pytorch_model.bin",
-                    "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_B1/checkpoint-4200/pytorch_model.bin",
-                    "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_C1/checkpoint-4200/pytorch_model.bin",
-                    "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_D1_v2/checkpoint-4300/pytorch_model.bin",
-                    "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_E1/checkpoint-4100/pytorch_model.bin",
-                    "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
-                    "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_B0/checkpoint-7200/pytorch_model.bin",
-                    "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_C02/checkpoint-7000/pytorch_model.bin",
-                    "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_DO2/checkpoint-1400/pytorch_model.bin"
+                    "../checkpoints/git_hilbert_train_A1/checkpoint-4100/pytorch_model.bin",
+                    "../checkpoints/git_hilbert_train_B1/checkpoint-4200/pytorch_model.bin",
+                    "../checkpoints/git_hilbert_train_C1/checkpoint-4200/pytorch_model.bin",
+                    "../checkpoints/git_hilbert_train_D1_v2/checkpoint-4300/pytorch_model.bin",
+                    "../checkpoints/git_hilbert_train_E1/checkpoint-4100/pytorch_model.bin",
+                    "../checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
+                    "../checkpoints/git_hilbert_train_B0/checkpoint-7200/pytorch_model.bin",
+                    "../checkpoints/git_hilbert_train_C02/checkpoint-7000/pytorch_model.bin",
+                    "../checkpoints/git_hilbert_train_DO2/checkpoint-1400/pytorch_model.bin"
                    ]
     
 

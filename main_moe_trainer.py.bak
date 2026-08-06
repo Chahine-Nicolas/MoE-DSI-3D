@@ -38,10 +38,10 @@ import numpy as np
 import requests
 from PIL import Image
 from transformers import AutoProcessor,AutoModel, AutoConfig, AutoTokenizer, TrainingArguments , HfArgumentParser
-from extern.blip2.modeling_blip_2 import Blip2ModelQuerryLearning
-from extern.blip2.processing_blip_2 import Blip2Processor
+#from extern.blip2.modeling_blip_2 import Blip2ModelQuerryLearning
+#from extern.blip2.processing_blip_2 import Blip2Processor
 from transformers import BertTokenizer, BertModel,BertLMHeadModel,MT5Tokenizer
-from extern.blip2.modeling_bert_generation   import BertGenerationDecoder
+#from extern.blip2.modeling_bert_generation   import BertGenerationDecoder
 from transformers import  GPTQConfig
 
 ## DSI QG
@@ -254,7 +254,7 @@ def parse_config():
 
 ##############################################################################
 # Optimisé make_compute_metrics
-# #############################################################################
+##############################################################################
 def make_compute_metrics(tokenizer, logger, rank, positions_database, label_mapping, label_mapping_val, save_file_name):
 #def make_compute_metrics(tokenizer, logger, rank, train_set, sequence_path, d=None):
     def compute_metrics(eval_preds):
@@ -264,8 +264,14 @@ def make_compute_metrics(tokenizer, logger, rank, positions_database, label_mapp
             rank_list = tokenizer.batch_decode(beams, skip_special_tokens=True)
             label_id = tokenizer.decode(label, skip_special_tokens=True)
             
+            #query_id = label_mapping.get(label_id, label_id) # (keyname, value=value to return if the specified key does not exist)
             query_id = label_mapping_val[label_id]
             answers_ids = [label_mapping.get(x, x) for x in rank_list]
+            #print("query_id ", query_id)
+            #print("answers_ids ", answers_ids)
+            # Position-based metrics
+            #label_id_gps = positions_database[int(query_id)]
+            #rank_list_gps = [positions_database[int(x)] for x in answers_ids]
 
             label_id_gps = positions_database.get(query_id, [-10, -10])
             rank_list_gps = [positions_database.get(x, [-10, -10]) for x in answers_ids]
@@ -276,7 +282,8 @@ def make_compute_metrics(tokenizer, logger, rank, positions_database, label_mapp
             rank_list_dist = [
                 math.dist(label_id_gps[:2], rank_list_gps[i][:2]) for i in range(len(rank_list_gps))
             ]
-
+            #print("rank_list_dist ", rank_list_dist)
+            
             rank_list_dist_filter = [1 if dist <= 1 else 0 for dist in rank_list_dist]
             print("rank_list_dist_filter ", rank_list_dist_filter)
             
@@ -286,6 +293,10 @@ def make_compute_metrics(tokenizer, logger, rank, positions_database, label_mapp
                 if hits_clos[0] == 0: 
                     hit_at_1 += 1
                     
+        #hit_at_1_tensor = torch.tensor(hit_at_1, device="cuda")
+        #hit_at_10_tensor = torch.tensor(hit_at_10, device="cuda")
+        #dist.all_reduce(hit_at_1_tensor, op=dist.ReduceOp.SUM)
+        #dist.all_reduce(hit_at_10_tensor, op=dist.ReduceOp.SUM)
 
         total_predictions = len(eval_preds.predictions)
 
@@ -477,8 +488,8 @@ class IndexingCollator(DataCollatorWithPadding):
                 lidar_val[key] = val 
                 
         return lidar_val
-        ##############################################################################
-        ##############################################################################
+##############################################################################
+##############################################################################
         
 class EarlyStoppingCallback(TrainerCallback):
     def __init__(self, metric_name="", threshold=1):
@@ -951,9 +962,15 @@ def main():
     train_indicesb = load_training_set_ids("id_zone_B_dsi_train_list.json", "id_zone_B_dsi_val_list.json")
     train_indicesc = load_training_set_ids("id_zone_C_dsi_train_list.json", "id_zone_C_dsi_val_list.json")
     train_indicesd = load_training_set_ids("id_zone_D_dsi_train_list.json", "id_zone_D_dsi_val_list.json")
-    train_indicese = load_training_set_ids("id_zone_E_dsi_train_list.json", "id_zone_E_dsi_val_list.json")  
+    """
 
-    all_train_indices = train_indicesa + train_indicesb + train_indicesc + train_indicesd + train_indicese
+    train_indicesa = load_training_set_ids("id_small_list_A.json", "id_small_list_A.json")
+    train_indicesb = load_training_set_ids("id_small_list_B.json", "id_small_list_B.json")
+    train_indicesc = load_training_set_ids("id_small_list_C.json", "id_small_list_C.json")
+    train_indicesd = load_training_set_ids("id_small_list_D.json", "id_small_list_D.json")
+    """
+
+    all_train_indices = train_indicesa + train_indicesb + train_indicesc + train_indicesd
 
 
 
@@ -961,15 +978,19 @@ def main():
     name_train_indicesb = load_training_set_ids("zone_B_dsi_train_list.json", "zone_B_dsi_val_list.json")
     name_train_indicesc = load_training_set_ids("zone_C_dsi_train_list.json", "zone_C_dsi_val_list.json")
     name_train_indicesd = load_training_set_ids("zone_D_dsi_train_list.json", "zone_D_dsi_val_list.json")
-    name_train_indicese = load_training_set_ids("zone_E_dsi_train_list.json", "zone_E_dsi_val_list.json")
 
-
+    """
+    name_train_indicesa = load_training_set_ids("small_list_A.json", "small_list_A.json")
+    name_train_indicesb = load_training_set_ids("small_list_B.json", "small_list_B.json")
+    name_train_indicesc = load_training_set_ids("small_list_C.json", "small_list_C.json")
+    name_train_indicesd = load_training_set_ids("small_list_D.json", "small_list_D.json")
+    """
+    
     all_names = [
         name_train_indicesa,
         name_train_indicesb,
         name_train_indicesc,
-        name_train_indicesd, 
-        name_train_indicese
+        name_train_indicesd
     ]
 
     ########################################################
@@ -999,14 +1020,12 @@ def main():
     eval_name_b = load_set_ids("zone_B_dsi_eval_list.json", sequence_path)
     eval_name_c = load_set_ids("zone_C_dsi_eval_list.json", sequence_path)
     eval_name_d = load_set_ids("zone_D_dsi_eval_list.json", sequence_path)
-    eval_name_e = load_set_ids("zone_E_dsi_eval_list.json", sequence_path)
     
     all_names = [
         eval_name_a,
         eval_name_b,
         eval_name_c,
-        eval_name_d,
-        eval_name_e
+        eval_name_d
     ]
     ########################################################
     # ground truth frame_id distribution
@@ -1064,25 +1083,32 @@ def main():
         return torch.stack(xx)
 
         
-    """
-    checkpoint_paths = ["../checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
-                        "../checkpoints/git_hilbert_train_B0/checkpoint-7200/pytorch_model.bin",
-                        "../checkpoints/git_hilbert_train_C02/checkpoint-7000/pytorch_model.bin",
-                        "../checkpoints/git_hilbert_train_DO2/checkpoint-1400/pytorch_model.bin"
+
+    checkpoint_paths = ["/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
+                        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_B0/checkpoint-7200/pytorch_model.bin",
+                        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_C02/checkpoint-7000/pytorch_model.bin",
+                        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_DO2/checkpoint-1400/pytorch_model.bin"
                        ]
     """
-    checkpoint_paths = ["../checkpoints/git_hilbert_train_A1/checkpoint-4100/pytorch_model.bin",
-                    "../checkpoints/git_hilbert_train_B1/checkpoint-4200/pytorch_model.bin",
-                    "../checkpoints/git_hilbert_train_C1/checkpoint-4200/pytorch_model.bin",
-                    "../checkpoints/git_hilbert_train_D1_v2/checkpoint-4300/pytorch_model.bin",
-                    "../checkpoints/git_hilbert_train_E1/checkpoint-4100/pytorch_model.bin",
-                   ]
-
+    checkpoint_paths = ["/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
+                        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
+                        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
+                        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
+                       ] # sae result if gate free or 1,1,1,1
     
+    """
     transformer_list = []
     
+    """
+    for chkp in checkpoint_paths:
+        print("load ", chkp)
+        state_dict = torch.load(chkp)
+        model_dsi.load_state_dict(state_dict, strict=False)
+        model_dsi.eval()
+        transformer_list.append(model_dsi)
+    """
 
-
+    
     import copy
     transformer_list = []
     for chkp in checkpoint_paths:
@@ -1144,7 +1170,7 @@ def main():
     """
     
     class ExpertClassifier(nn.Module):
-        def __init__(self, input_dim=256, num_experts=5):
+        def __init__(self, input_dim=256, num_experts=4):
             super(ExpertClassifier, self).__init__()
             self.model = nn.Sequential(
                 nn.Linear(input_dim, 256),
@@ -1189,13 +1215,10 @@ def main():
             
             self.w_gating = nn.Parameter(torch.randn(*outer_expert_dims, dim, num_gates))
             
-            self.gate = ExpertClassifier(input_dim=256, num_experts=5)
+            self.gate = ExpertClassifier(input_dim=256, num_experts=4)
             #self.gate.load_state_dict(torch.load("expert_router_22.pth"))
             #self.gate.load_state_dict(torch.load("expert_router_4linear.pth"))
-            
-            #self.gate.load_state_dict(torch.load("gate_EST.pth"))
-            self.gate.load_state_dict(torch.load("expert_gate_ouest0.pth"))
-            
+            self.gate.load_state_dict(torch.load("gate_EST.pth"))
             
             self.gate.to(next(self.parameters()).device)
             self.gate.eval()
@@ -1381,7 +1404,7 @@ def main():
             self.expert_labels = expert_labels
 
             gating_kwargs = {'second_policy_train': 'random', 'second_policy_eval': 'random', 'second_threshold_train': 0.2, 'second_threshold_eval': 0.2, 'capacity_factor_train': 1.25, 'capacity_factor_eval': 2}
-            self.gate = Top2Gating(256, num_gates = 5, **gating_kwargs)
+            self.gate = Top2Gating(256, num_gates = 4, **gating_kwargs)
 
         # for training
         def forward(self, input_ids=None, attention_mask=None, pixel_values=None, lidar_values=None, labels=None, **kwargs):
@@ -1539,12 +1562,27 @@ def main():
                     return None
             return torch.stack(xx)
 
+        def load_tensor_just_one(nn,lab) :
+            xx = []
+            fname = root_path + "/" +  lab + "/" +  (nn+'.pt')
+            if os.path.isfile(fname) : 
+                xx1 = torch.load(fname, map_location='cuda')
+                xx.append(xx1)
+            else :
+                print("TENSOR NOT FOUND")
+                print(fname)
+                return None
+            return torch.stack(xx)
+
         def _make_gate_input(self, lidar_values):
             # moyen d'opitmiser ici
             filename = lidar_values['frame_id']
+            
             #input_vec = load_tensor_just_one(filename[0], "256_desc_2025-06-23_11-22-13_run_0_4").to(device).float()
             input_vec = lidar_values['frame_id_desc'][0][0]
             return input_vec
+
+
 
         # for validation / evaluation
         def generate(self, x=None, pixel_values=None, lidar_values=None, **kwargs):
@@ -1698,13 +1736,13 @@ def main():
                 return {"sequences": token_ids.T, "scores": mixed_output, "gate_weights": gate_weights, "sequences_scores": combined_log_scores }
             return {"sequences": token_ids.T, "scores": mixed_output, "gate_weights": gate_weights}
 
-        def generate_top1(self, x=None, pixel_values=None, lidar_values=None, **kwargs):
             
+        def generate_top1(self, x=None, pixel_values=None, lidar_values=None, **kwargs):
             if x is None:
                 x = self._make_gate_input(lidar_values)
-
+    
             dispatch_tensor, combine_tensor, gate_loss, CUSTOM_GATE = self.gate(x)
-
+    
             # 1. pick active expert
             active = torch.argmax(CUSTOM_GATE[0]).item()
             expert = self.experts[active]
@@ -1733,13 +1771,14 @@ def main():
         
             # 4. decode
             token_ids = mixed_output.argmax(dim=-1)
-        
+  
             return {
                 "sequences": token_ids.T,
                 "scores": mixed_output,
                 "gate_weights": CUSTOM_GATE,
                 "sequences_scores": out.sequences_scores,
             }
+
         def generate_top1_V2(self, x=None, pixel_values=None, lidar_values=None, **kwargs):
             if x is None:
                 x = self._make_gate_input(lidar_values)
@@ -1771,7 +1810,6 @@ def main():
                 "gate_weights": CUSTOM_GATE,
                 "sequences_scores": out.sequences_scores # ✅ correct ranking
             }
-
 
     #############################################################################
     # moe_model
@@ -1921,9 +1959,6 @@ def main():
             ) 
 
         is_trained = False
-
-
-        
         if not os.path.isdir(previous_model_path) :
             if args.local_rank == 0 :
                 print("train from scratch : ",previous_model_path)
@@ -1955,14 +1990,11 @@ def main():
         all_eval_indices = load_set_ids("id_dsi_eval_list.json", sequence_path)
         print(len(all_eval_indices))
 
-        #eval_indices = all_eval_indices.sort()
-
-        all_eval_indices.sort()
+        
         eval_indices = all_eval_indices
-
         eval_subset = torch.utils.data.Subset(eval_set, eval_indices)
         print("len(eval_subset) ", len(eval_subset))
-        
+
         del train_set
         gc.collect()  # Force garbage collection
 

@@ -1,6 +1,6 @@
 DATASET: 'KittiDataset_2012'
 SEQ: '06'
-DATA_PATH: '../datasets/sequences/'
+DATA_PATH: '/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/datasets/sequences/' # $WORKSF
 
 BACKEND: &BACKEND
   NAME: HardDiskBackend

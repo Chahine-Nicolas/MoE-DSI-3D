@@ -954,10 +954,10 @@ def main():
                 return None
         return torch.stack(xx)
 
-    checkpoint_paths = ["../checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
-                        "../checkpoints/git_hilbert_train_B0/checkpoint-7200/pytorch_model.bin",
-                        "../checkpoints/git_hilbert_train_C02/checkpoint-7000/pytorch_model.bin",
-                        "../checkpoints/git_hilbert_new_tokenizer_D0/checkpoint-6100/pytorch_model.bin",
+    checkpoint_paths = ["/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
+                        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_B0/checkpoint-7200/pytorch_model.bin",
+                        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_C02/checkpoint-7000/pytorch_model.bin",
+                        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_D0/checkpoint-6100/pytorch_model.bin",
                        ]
 
     transformer_list = []

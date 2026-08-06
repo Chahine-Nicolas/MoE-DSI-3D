@@ -1,6 +1,7 @@
-DATASET: 'KittiDataset_2012'
-SEQ: '06'
-DATA_PATH: '../datasets/sequences/'
+DATASET: 'LHD_dataset'
+#DATASET: 'KittiDataset_2012'
+SEQ: ''
+DATA_PATH: '/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/lidarhd_v3' # $WORKSF
 
 BACKEND: &BACKEND
   NAME: HardDiskBackend
@@ -17,7 +18,7 @@ GET_ITEM_LIST: ["points"]
 
 TRAIN_ONLY_REVISITED :  False
 DO_SELF_EVAL :  False
-LABEL_TYPE : hierarchical  #gps,label,hierarchical
+LABEL_TYPE : hilbert  #gps,label,hierarchical
 
 DATA_AUGMENTOR:
     DISABLE_AUG_LIST: ['placeholder']

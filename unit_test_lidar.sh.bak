@@ -46,25 +46,13 @@ LABEL_MODE="hilbert"
 # EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_seq_22_80_20_contrast_quad_hilbert_suite_16600"
 
 EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_seq_00_80_20_contrast_quad_hilbert"
-#EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_seq_02_80_20_contrast_quad_hilbert"
-#EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_seq_05_80_20_contrast_quad_hilbert"
-#EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_seq_06_80_20_contrast_quad_hilbert"
-#EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_seq_07_80_20_contrast_quad_hilbert"
-#EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_seq_08_80_20_contrast_quad_hilbert"
 
-TRAINER_CHECKPOINT="False"
 
+#TRAINER_CHECKPOINT="../checkpoints/git_hilbert_lhd_long_indx_shuffle/checkpoint-1400"
 
 EVAL_CHECKPOINT="../checkpoints/${EXTRA_TAG}/"
 
-
-eval_chkt="checkpoint-7300" #00
-#eval_chkt="checkpoint-9200" #02
-#eval_chkt="checkpoint-8300" #05
-#eval_chkt="checkpoint-1800" #06
-#eval_chkt="checkpoint-2700" #07
-#eval_chkt="checkpoint-7600" #08
-
+eval_chkt="checkpoint-5000" #lhd
 
 CHECKPOINT=ckpts/gd_mae_pretrain_kitti.pth
 
@@ -126,10 +114,12 @@ export 'PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512'
 # 	   --workers 1
 # fi
 
-python -m pdb main_80_20_ouest_est.py\
+
+#python  -m pdb  main.py \
+python -m pdb main_80_20.py \
        --launcher none \
        --cfg_file ${CONFIG_NAME} \
-       --save_hit_file hit_scores_temp.txt \
+       --save_hit_file hit_train_asuppr.txt \
        --workers 1 \
        --model_name ${MODEL_NAME} \
        --dataset_train_len ${DATASET_LEN} \

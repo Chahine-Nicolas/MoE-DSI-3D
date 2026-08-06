@@ -63,7 +63,7 @@ from transformers import TrainerCallback
 
 ##################################
 # read pos
-# #################################
+##################################
 from module_loader_kitti_pose import * # add for more metrics
 import math
 import gc
@@ -255,7 +255,7 @@ def parse_config():
 
 ##############################################################################
 # Optimisé make_compute_metrics
-# #############################################################################
+##############################################################################
 def make_compute_metrics(tokenizer, logger, rank, positions_database, label_mapping, save_file_name):
     def compute_metrics(eval_preds):
         hit_at_1, hit_at_10 = 0, 0
@@ -297,7 +297,7 @@ def make_compute_metrics(tokenizer, logger, rank, positions_database, label_mapp
 
 ##############################################################################
 # Optimisé DSITrainer
-# #############################################################################
+##############################################################################
 class DSITrainer(Trainer):
     def __init__(self, restrict_decode_vocab, id_max_length, LIK, **kwds):
         super().__init__(**kwds)
@@ -395,7 +395,7 @@ class DSITrainer(Trainer):
 
 ##############################################################################
 # Optimisé IndexingCollator
-# #############################################################################
+##############################################################################
 class IndexingCollator(DataCollatorWithPadding):
     def __init__(self, label_tokenizer, padding, id_max_length, processor, batch_size):
         super().__init__(label_tokenizer, padding)
@@ -684,7 +684,7 @@ def main():
     work_path = os.getenv('WORKSF')
     
     model_paths = {
-        "git_base": os.path.join(work_path, "datas/transformers/git-base-lhd"),
+        "git_base": os.path.join(work_path, "datas/transformers/git-base-coco"),
         "git_large": os.path.join(work_path, "datas/transformers/git-large-coco"),
         "blip2": os.path.join(work_path, "datas/transformers/blip2-opt-2.7b"),
         "bert_base": os.path.join(work_path, "datas/transformers/bert-base-uncased"),
@@ -709,8 +709,6 @@ def main():
         
         # Load GIT configuration and model
         config = AutoConfig.from_pretrained(model_dsi_path)
-        #config.vocab_size = 1000
-        #import pdb; pdb.set_trace()
         model_dsi = GitForCausalLM(config).to(device=device)
         tokenizer = AutoTokenizer.from_pretrained(model_dsi_path)
         
@@ -723,6 +721,7 @@ def main():
                 logger.info("Restoring GIT input/output embeddings and lidar parameters...")
             input_embeddings = copy.deepcopy(model_dsi.git.get_input_embeddings())
             output_embeddings = copy.deepcopy(model_dsi.get_output_embeddings())
+            
             bt_norm = copy.deepcopy(model_dsi.lidar_encoder.bt_norm)
             lidar_projection = copy.deepcopy(model_dsi.lidar_encoder.lidar_projection)
             model_dsi.set_input_embeddings(input_embeddings)
@@ -850,6 +849,8 @@ def main():
         pfb = tuple(prefix_beam.cpu().numpy())  
         return prefix_dict.get(pfb, [102])
     
+
+    
     #update object
     train_set.tokenizer = tokenizer
     train_set.image_processor = processor
@@ -868,6 +869,7 @@ def main():
         id_max_length=ID_MAX_LENGTH,
         batch_size=args.batch_size) # = dict with 
 
+
     logger.info("============== FULL NETWORK STATE =================")
     for name, param in model_dsi.named_parameters() : logger.info(name + "\t =>" + str(param.requires_grad)) 
     logger.info("============== FREE NETWORK STATE =================")
@@ -885,371 +887,204 @@ def main():
         Path(checkpoint_dir).mkdir(parents=True, exist_ok=True)
 
 
-    ################################################################################################################################################
-    # Load experts training dataset
-    ################################################################################################################################################
 
 
+    # -----------------------------
+    # === Mixture-of-Experts Setup
+    # -----------------------------
+
+    import torch.nn.functional as F
     
-    train_indices_path = "id_zone_C_dsi_train_list.json"
-    val_indices_path = "id_zone_C_dsi_val_list.json"
-
-    print("train_indices_path ", train_indices_path)
-    print("val_indices_path ", val_indices_path)
-    f = open(sequence_path +"/"+ train_indices_path) 
-    train_indices = json.load(f)
-    f.close()
-
-
-    def load_training_set_ids(train_indices_path, val_indices_path):
-        print("train_indices_path ", train_indices_path)
-        print("val_indices_path ", val_indices_path)
-        f = open(sequence_path +"/"+ train_indices_path) 
-        train_indices = json.load(f)
-        f.close()
-        
-        
-        return train_indices
-
-
-    train_indicesa = load_training_set_ids("id_zone_A_dsi_train_list.json", "id_zone_A_dsi_val_list.json")
-    train_indicesb = load_training_set_ids("id_zone_B_dsi_train_list.json", "id_zone_B_dsi_val_list.json")
-    train_indicesc = load_training_set_ids("id_zone_C_dsi_train_list.json", "id_zone_C_dsi_val_list.json")
-    train_indicesd = load_training_set_ids("id_zone_D_dsi_train_list.json", "id_zone_D_dsi_val_list.json")
-
-
-    """
-    train_subseta = torch.utils.data.Subset(train_set, train_indicesa)
-    train_subsetb = torch.utils.data.Subset(train_set, train_indicesb)
-    train_subsetc = torch.utils.data.Subset(train_set, train_indicesc)
-    train_subsetd = torch.utils.data.Subset(train_set, train_indicesd)
-    """
-    all_train_indices = train_indicesa + train_indicesb + train_indicesc + train_indicesd
-
-    train_subset = torch.utils.data.Subset(train_set, all_train_indices)
-    """
-    print("len train_subseta", len(train_subseta))
-    print("len train_subsetb", len(train_subsetb))
-    print("len train_subsetc", len(train_subsetc))
-    print("len train_subsetd", len(train_subsetd))
-    """
-    print("len train_subset", len(train_subset))
-
-    ################################################################################################################################################
-    # Mixture-of-Experts Setup
-    ################################################################################################################################################
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     
-    root_path =  cfg['DATA_CONFIG']['DATA_PATH']
-
-    def load_tensor(filename,lab) :
-        xx = []
-        for ll in filename :
-            fname = root_path + "/" +  lab + "/" + (os.path.splitext(ll)[0]+'.pt')
-            if os.path.isfile(fname) : 
-                xx1 = torch.load(fname)
-                xx.append(xx1)
-            else :
-                print("TENSOR NOT FOUND")
-                print(fname)
-                return None
-        return torch.stack(xx)
-
-    checkpoint_paths = ["../checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
-                        "../checkpoints/git_hilbert_train_B0/checkpoint-7200/pytorch_model.bin",
-                        "../checkpoints/git_hilbert_train_C02/checkpoint-7000/pytorch_model.bin",
-                        "../checkpoints/git_hilbert_new_tokenizer_D0/checkpoint-6100/pytorch_model.bin",
-                       ]
-
-    transformer_list = []
-
-    for chkp in checkpoint_paths:
-        state_dict = torch.load(chkp)
-        model_dsi.load_state_dict(state_dict, strict=False)
-        model_dsi.eval()
-        transformer_list.append(model_dsi)
-
+    # --- 1) Define helper to load a fresh model per checkpoint ---
+    def load_expert_from_checkpoint(chkp_path, model_class=None, config_path=None):
+        """
+        Load a fresh model instance for each checkpoint path.
+        - model_class: optional class (e.g. GitForCausalLM) to instantiate; if None we use AutoModel.
+        - config_path: path to config / pretrained identifier if required.
+        """
+        if model_class is None:
+            # fallback to AutoModel (adjust if your experts are causal LM wrappers)
+            model = AutoModel.from_pretrained(config_path if config_path is not None else chkp_path)
+            model.load_state_dict(torch.load(chkp_path, map_location="cpu"), strict=False)
+        else:
+            # if you use a custom model class (e.g. GitForCausalLM)
+            cfg = AutoConfig.from_pretrained(config_path if config_path is not None else chkp_path)
+            model = model_class(cfg)
+            sd = torch.load(chkp_path, map_location="cpu")
+            model.load_state_dict(sd, strict=False)
+        model.to(device)
+        model.eval()
+        return model
     
-    """
-    class TransformerExperts(nn.Module):
-        def __init__(self, transformer_list):
+    # --- 2) Wrap experts to produce a pooled vector output (uniform interface) ---
+    class ExpertWrapper(nn.Module):
+        def __init__(self, expert_model, pool_method="mean"):
             super().__init__()
-            self.experts = nn.ModuleList(transformer_list)  # each is a full model
+            self.expert = expert_model
+            self.pool_method = pool_method
     
-        def forward(self, x, input_data):
-            print(x)
-            output = torch.zeros(256, device=x.device)
-            return output
-
-    experts = TransformerExperts(transformer_list)
-        
-    import pdb; pdb.set_trace()
+        def forward(self, batch):
+            """
+            batch: a dict or tensor that the underlying expert accepts.
+            Return: pooled vector [batch, hidden_dim]
+            IMPORTANT: adapt how you call the expert to match its expected inputs.
+            """
+            # Example assumptions:
+            # - If batch is dict with 'pixel_values' or 'input_ids', forward appropriately.
+            # - If the expert returns a ModelOutput/dict, attempt to get last_hidden_state.
+            # - If expert outputs sequence [b, seq, d] -> perform pooling to [b, d].
+            if isinstance(batch, dict):
+                # adapt these keys to what your expert expects (pixel_values, input_ids, attention_mask, etc.)
+                kwargs = {}
+                if "pixel_values" in batch:
+                    kwargs["pixel_values"] = batch["pixel_values"]
+                if "input_ids" in batch:
+                    kwargs["input_ids"] = batch["input_ids"]
+                if "attention_mask" in batch:
+                    kwargs["attention_mask"] = batch["attention_mask"]
+                # call expert - may return ModelOutput or tensor
+                out = self.expert(**kwargs)
+            else:
+                out = self.expert(batch)
     
-    from mixture_of_experts import MoE
-    """
+            # Unpack typical HF outputs
+            if isinstance(out, dict) or hasattr(out, "last_hidden_state"):
+                seq = getattr(out, "last_hidden_state", out.get("last_hidden_state", None))
+            else:
+                seq = out
     
-    #moe = MoE(dim = 256, num_experts = 4, experts = experts).to(device)
+            # If still None, try common attributes
+            if seq is None:
+                # try out['hidden_states'] etc. If not found, assume out is tensor
+                if isinstance(out, dict) and "hidden_states" in out:
+                    seq = out["hidden_states"][-1]
+                else:
+                    seq = out
     
-
-
-    class MoE_DSI(nn.Module):
-        def __init__(self, input_dim, experts):
+            # Now pool sequence -> [batch, hidden_dim]
+            if seq is None:
+                raise RuntimeError("Could not extract hidden states from expert output. Adapt ExpertWrapper.")
+            if seq.dim() == 3:  # [b, seq_len, dim]
+                if self.pool_method == "mean":
+                    pooled = seq.mean(dim=1)
+                elif self.pool_method == "first":
+                    pooled = seq[:, 0, :]
+                else:
+                    pooled = seq.mean(dim=1)
+            elif seq.dim() == 2:
+                pooled = seq
+            else:
+                raise RuntimeError("Unexpected expert output shape: " + str(seq.shape))
+    
+            return pooled  # [batch, dim]
+    
+    # --- 3) Soft gating MoE with einsum ---
+    class SoftGatingMoE(nn.Module):
+        def __init__(self, expert_wrappers, hidden_dim, num_classes, freeze_experts=True, load_coef=0.01):
             super().__init__()
-            self.num_experts = len(experts)
-            self.experts = nn.ModuleList(experts)   # pretrained DSI models
-            for p in self.experts.parameters(): 
-                p.requires_grad = False   
-            self.gate = nn.Linear(input_dim, self.num_experts)
+            self.experts = nn.ModuleList(expert_wrappers)
+            self.num_experts = len(expert_wrappers)
+            self.gate = nn.Linear(hidden_dim, self.num_experts)
+            self.classifier = nn.Linear(hidden_dim, num_classes)
+            self.load_coef = load_coef
     
-        def forward(self, x, input_data):
+            if freeze_experts:
+                for p in self.experts.parameters():
+                    p.requires_grad = False
+    
+        def forward(self, batch):
             """
-            x: [batch, 256]   -> gate input
-            input_data: dict passed to experts
+            batch: dict from your dataloader (moved already to device).
+            Returns logits [b, num_classes], aux_loss (scalar), and gate usage stats.
             """
-            # --- Gate ---
-            gate_logits = self.gate(x)                   # [batch, num_experts]
-            gate_weights = torch.softmax(gate_logits, dim=-1)  # mixture weights
-
-            print("gate_weights ", gate_weights)
-            
-            # --- Run Experts ---
-            all_outputs = []
-            count = 0
+            # 1) We need a gating input: compute a cheap pooled representation to feed gate.
+            # Here we compute a lightweight pooled vector by calling the FIRST expert on the batch
+            # but **without** disabling grads for gate — the experts may be frozen.
+            # If you have a cheap encoder for gating, use that instead.
+            with torch.no_grad():
+                pooled0 = self.experts[0](batch)  # [b, hidden_dim]
+    
+            # Use pooled0 as gate input (no grad through expert). If you'd rather compute gate from inputs,
+            # replace with a small encoder applied to batch raw inputs.
+            gate_input = pooled0.detach()  # [b, hidden_dim]
+    
+            logits = self.gate(gate_input)         # [b, E]
+            gates = F.softmax(logits, dim=-1)      # [b, E]
+    
+            # 2) compute each expert's pooled output (we call wrapped experts which return pooled vectors)
+            expert_outputs = []
             for expert in self.experts:
-                count += 1
-                print("run model ",count)
-                # run generation to get scores (logits per vocab)
-                out = expert.generate(
-                    pixel_values=input_data['pixel_values'],
-                    lidar_values=input_data['lidar_values'],
-                    points=None,
-                    max_length=10,
-                    num_beams=10,
-                    num_return_sequences=1,
-                    eos_token_id=3,
-                    pad_token_id=0,
-                    bos_token_id=2,
-                    renormalize_logits=False,
-                    early_stopping=False, 
-                    prefix_allowed_tokens_fn=restrict_decode_vocab_v3,
-                    return_dict_in_generate=True,                
-                    output_scores=True,
-                )
-                # `out.scores` is a tuple of [logits at each step]
-                # shape: (seq_len, batch * beams, vocab_size)
-                scores = torch.stack(out.scores, dim=0)  
-                all_outputs.append(scores)
+                # If experts are frozen you can call them with torch.no_grad() to save memory.
+                if all(p.requires_grad == False for p in expert.parameters()):
+                    with torch.no_grad():
+                        out = expert(batch)          # [b, hidden_dim]
+                else:
+                    out = expert(batch)
+                expert_outputs.append(out)
     
-            # --- Mix Experts ---
-            # all_outputs: list of [seq_len, batch*beams, vocab]
-            all_outputs = torch.stack(all_outputs, dim=0)   # [num_experts, seq_len, batch*beams, vocab]
-            
-            # expand gate weights so we can weight expert outputs
-            # gate_weights: [batch, num_experts] → [num_experts, 1, batch*beams, 1]
-            gw = gate_weights.transpose(0,1).unsqueeze(1).unsqueeze(-1)
+            # stack -> [b, hidden_dim, E]
+            expert_outputs = torch.stack(expert_outputs, dim=-1)
     
-            # weighted sum over experts
-            mixed_output = torch.sum(all_outputs * gw, dim=0)  # [seq_len, batch*beams, vocab]
+            # combine using einsum:
+            # gates [b, E], expert_outputs [b, hidden, E] -> combined [b, hidden]
+            combined = torch.einsum("be, bhe -> bh", gates, expert_outputs)
     
-            return mixed_output, gate_weights
+            logits_task = self.classifier(combined)   # [b, num_classes]
+    
+            # load-balance auxiliary loss
+            mean_gates = gates.mean(dim=0)    # [E]
+            aux_loss = (mean_gates ** 2).sum() * self.num_experts
+    
+            # debugging info
+            usage = mean_gates.detach().cpu().tolist()
+    
+            return logits_task, aux_loss, usage
+    
+    # -----------------------------
+    # === Instantiate experts ===
+    # -----------------------------
+    # Replace these checkpoint paths with your actual .bin/config directories
+    checkpoint_paths = [
+        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
+        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_B0/checkpoint-7200/pytorch_model.bin",
+        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_C0/checkpoint-5900/pytorch_model.bin",
+        "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_D0/checkpoint-6100/pytorch_model.bin",
+    ]
+    
+    # If your experts are GitForCausalLM instances, pass that class as model_class to loader.
+    # Example: expert_model = load_expert_from_checkpoint(chkp, model_class=GitForCausalLM, config_path=model_dsi_path)
+    expert_wrappers = []
+    for chkp in checkpoint_paths:
+        # NOTE: adapt model_class/config_path if needed
+        try:
+            # Try to load using the same class as model_dsi if available
+            print("load model from ", chkp)
+            expert_model = load_expert_from_checkpoint(chkp, model_class=None, config_path=model_dsi_path)
+        except Exception as e:
+            print(f"Warning: fallback loading {chkp} with AutoModel due to {e}")
+            expert_model = load_expert_from_checkpoint(chkp, model_class=None, config_path=None)
+    
+        expert_wrappers.append(ExpertWrapper(expert_model, pool_method="mean"))
 
-
-    moe_model = MoE_DSI(input_dim=256, experts=transformer_list).to(device)
-
-    optimizer = torch.optim.Adam(moe_model.gate.parameters(), lr=1e-5)
-
-
+    print("experts loaded")
+    import pdb; pdb.set_trace()
+    
+    hidden_dim = 1024
     num_epochs = 10
-    loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
+
+    # Instantiate MoE
+    num_classes = len(cfg.CLASS_NAMES)
+    moe = SoftGatingMoE(expert_wrappers, hidden_dim=hidden_dim, num_classes=num_classes, freeze_experts=True, load_coef=0.01).to(device)
     
-    for epoch in range(num_epochs):
-        for query_idx in range(len(train_subset)):
-            query_idx = 0
-            input_data = data_collator(torch.utils.data.Subset(train_subset, range(query_idx, query_idx+1))) 
-            
-            lidar_values = input_data['lidar_values']
-            filename = lidar_values['frame_id']
-            input_vec = load_tensor(filename.flatten(),"256_desc_2025-06-23_11-22-13_run_0_4").to(device).float()
-
-            labels = input_data["labels"].to(device)
-            
-            logits, gate_weights = moe_model(input_vec, input_data)
-
-            vocab_size = logits.shape[-1]
-
-            token_ids = logits.argmax(dim=-1) 
-
-            
-            import pdb; pdb.set_trace()
-            
-            expert0 = transformer_list[0]
-            out0 = expert0.generate(
-                    pixel_values=input_data['pixel_values'],
-                    lidar_values=input_data['lidar_values'],
-                    points=None,
-                    max_length=10,
-                    num_beams=10,
-                    num_return_sequences=1,
-                    eos_token_id=3,
-                    pad_token_id=0,
-                    bos_token_id=2,
-                    renormalize_logits=False,
-                    early_stopping=False, 
-                    prefix_allowed_tokens_fn=restrict_decode_vocab_v3,
-                    return_dict_in_generate=True,                
-                    output_scores=True,
-                )
-
-            import pdb; pdb.set_trace()
-
-            out = expert0(
-                input_ids=input_data["input_ids"],
-
-                inputs_embeds=input_vec
-                attention_mask=input_data["attention_mask"],
-                pixel_values=input_data["pixel_values"],
-                lidar_values=input_data["lidar_values"],
-                return_dict=True,
-            )
-
-            import pdb; pdb.set_trace()
-
-            outputs = self.git(
-            input_ids,
-            attention_mask=attention_mask,
-            position_ids=position_ids,
-            pixel_values=pixel_values,
-            lidar_values=lidar_values,
-            input_mod='frame_id',
-            points=points,
-            head_mask=head_mask,
-            inputs_embeds=inputs_embeds,
-            past_key_values=past_key_values,
-            use_cache=use_cache,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-        )
-
-
-
-
-
-
-            
-            
-            sequence_output = out[0]               # [batch, seq_len, hidden_dim]
-            logits = expert.output(sequence_output)  # [batch, seq_len, vocab]
-            all_outputs.append(logits)
-
-            import pdb; pdb.set_trace()
-
-
-            
-            #  shifted_logits = logits[:1].view(-1, vocab_size)
-            #  loss = loss_fct( shifted_logits, labels.view(-1) )
-
-            
-            loss = None
-            if labels is not None:
-                shifted_logits = logits[:-1].contiguous()     # [seq_len-1, batch, vocab]
-                shifted_labels = labels[1:].contiguous()      # [seq_len-1, batch]
-                #loss = loss_fct( shifted_logits.view(-1, vocab_size), shifted_labels.view(-1) )
-                
-                #loss = loss_fct( shifted_logits.view(-1, vocab_size), shifted_labels.view(-1) )
-
-                shifted_logits = logits[:1].view(-1, vocab_size)
-                loss = loss_fct( shifted_logits, labels.view(-1) )
-
-            
-                # dans modeling git
-                
-                """
-                shifted_logits.view(-1, self.config.vocab_size)
-                tensor([[-0.9376, -0.4855,  0.4339,  ...,  0.6635,  0.1074,  0.1868],
-                        [-0.0569,  0.0706, -0.6680,  ..., -0.1845, -0.3158, -0.9818],
-                        [-0.4564,  0.4943, -0.4055,  ...,  0.9632,  0.6090, -0.0870],...
-                """
-                
-                # shifted_logits.view(-1, self.config.vocab_size).shape torch.Size([576, 30522])
-                # labels.view(-1).shape torch.Size([576])
-
-                """
-                labels
-                tensor([[169, 811, 371,   3,   0,   0,   0,   0,   0],
-                        [223, 121, 255, 113,   3,   0,   0,   0,   0],
-                        [492, 204, 256,   3,   0,   0,   0,   0,   0],
-                        [164, 558, 128,   3,   0,   0,   0,   0,   0],
-                        [309, 149, 288,   3,   0,   0,   0,   0,   0],
-                        [433, 214, 155,   3,   0,   0,   0,   0,   0],
-                        [354, 117, 556, 117,   3,   0,   0,   0,   0],
-                        [386, 189, 380,   3,   0,   0,   0,   0,   0],
-                        [146, 194, 210, 140,   3,   0,   0,   0,   0],
-                        [354, 170, 288,   3,   0,   0,   0,   0,   0],
-                        [275, 132, 250,   3,   0,   0,   0,   0,   0],
-                        [433, 614, 113,   3,   0,   0,   0,   0,   0],...
-                """
-                #loss_lm = (loss_fct(shifted_logits.view(-1, self.config.vocab_size), labels.view(-1)) )
-
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            print("loss ", loss)
-        
-        print(f"Epoch {epoch} - Loss {loss.item():.4f}")
-
-
-    import pdb; pdb.set_trace()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     
-    import pdb; pdb.set_trace()
-
-    # training (add a epoch strategy ? )
-    for query_idx in range(len(train_subset)):
-        # Example forward pass
-        # input_vec = torch.randn(1, 256).to(device)  # your 256-dim vector
-        import pdb; pdb.set_trace()
-        query_idx = 0
-        input_data = data_collator(torch.utils.data.Subset(train_subset, range(query_idx, query_idx+1))) 
-        
-        lidar_values = input_data['lidar_values']
-        
-        filename = lidar_values['frame_id']
-        
-        input_vec = load_tensor(filename.flatten(),"256_desc_2025-06-23_11-22-13_run_0_4").to(device).float()
-
-        mixed_output, gate_weights = moe_model(input_vec, input_data)
-        
-        print("Mixture logits:", mixed_output.shape)  # [seq_len, beams*batch, vocab]
-        print("Gate weights:", gate_weights)          # distribution over experts
     
-    
-    import pdb; pdb.set_trace()
+  
 
 
-        
-    ################################################################################################################################################
-    # Mixture-of-Experts Setup
-    ################################################################################################################################################
 
-
-    
     """
     #############################################################################
     ### === Training / Evaluation ===
