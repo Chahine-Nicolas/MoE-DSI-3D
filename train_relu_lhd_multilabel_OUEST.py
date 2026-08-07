@@ -7,17 +7,20 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 
 list_seq = ["A1", "B1", "C1", "D1", "E1"] 
-root_path = "/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/lidarhd_v3"
+root_path = "../lidarhd_WEST"
+saved_descriptor_folder = "desc_2025-06-23_11-22-13"
+
+
 
 class multiSequenceDataset(Dataset):
-    def __init__(self, list_seq, data, root_path, target_label):
+    def __init__(self, list_seq, data, root_path, target_label, saved_descriptor_folder):
         self.samples = []
         self.labels = []
         self.seq_to_idx = {seq: i for i, seq in enumerate(list_seq)}
 
         for seq in list_seq:
             seq_str = seq
-            sequence_path = os.path.join(root_path, "256_desc_2025-06-23_11-22-13_run_0_4")
+            sequence_path = os.path.join(root_path, saved_descriptor_folder)
 
             for file_path_i in data[seq_str]:
                 file = os.path.basename(file_path_i)[:-4] + '.pt'
@@ -31,11 +34,7 @@ class multiSequenceDataset(Dataset):
                     #  lookup the correct multi-hot label from your dict
                     if file in target_label:
                         label = target_label[file]
-                    """
-                    else:
-                        # if missing, create a zero tensor
-                        label = torch.zeros(len(list_seq))
-                    """
+
 
                     self.samples.append(vec)
                     self.labels.append(label)
@@ -145,7 +144,7 @@ def predict_expert(model, feature_vector, device, threshold=0.5):
 
 def main():
 
-    with open("/lustre/fswork/projects/rech/dki/ujo91el/code/these_place_reco/LoGG3D-Net/config/kitti_tuples/is_revisit_D-3_T-30.json") as f:
+    with open("../LoGG3D-Net/config/kitti_tuples/is_revisit_D-3_T-30.json") as f:
         data = json.load(f)
 
     device = 'cuda'
@@ -258,17 +257,17 @@ def main():
         target_label[key] = multi_hot
 
     print("loading train set")
-    dataset =  multiSequenceDataset(list_seq, data, root_path, target_label)
+    dataset =  multiSequenceDataset(list_seq, data, root_path, target_label, saved_descriptor_folder)
     dataloader = DataLoader(dataset, batch_size=256, shuffle=True)
     print("loaded train set")
 
     print("loading val set")
-    dataset_val =  multiSequenceDataset(list_seq, data, root_path, target_label)
+    dataset_val =  multiSequenceDataset(list_seq, data, root_path, target_label, saved_descriptor_folder)
     dataloader_val = DataLoader(dataset, batch_size=256, shuffle=True)
     print("loaded val set")
     
     print("loading eval set")
-    dataset_eval =  multiSequenceDataset(list_seq, data, root_path, target_label)
+    dataset_eval =  multiSequenceDataset(list_seq, data, root_path, target_label, saved_descriptor_folder)
     dataloader_eval = DataLoader(dataset, batch_size=256, shuffle=True)
     print("loaded eval set")
     
@@ -364,7 +363,7 @@ def main():
     hit, num = 0, 0
     seen_proba = []
     for seq in list_seq:
-            sequence_path = os.path.join(root_path, "256_desc_2025-06-23_11-22-13_run_0_4")
+            sequence_path = os.path.join(root_path, saved_descriptor_folder)
             seq_str = seq
         
             for file_path_i in data_eval[seq_str]:

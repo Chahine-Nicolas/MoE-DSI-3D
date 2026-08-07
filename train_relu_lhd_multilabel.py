@@ -6,50 +6,20 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 
-list_seq = ["A0", "B0", "C0", "D0"] 
-root_path = "/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/lidarhd_v2"
+list_seq = ["A0", "B0", "C0", "D0"]
+root_path = "../lidarhd_EAST"
+saved_descriptor_folder = "desc_2025-06-23_11-22-13"
 
-"""
-class multiSequenceDataset(Dataset):
-    def __init__(self, list_seq, data, root_path):
-        self.samples = []
-        self.labels = []
-        self.seq_to_idx = {seq: i for i, seq in enumerate(list_seq)}  # converti 0,2,5 en 0,1,2..
-
-        for seq in list_seq:
-            seq_str = seq
-            sequence_path = os.path.join(root_path, "256_desc_2025-06-23_11-22-13_run_0_4")
-        
-            for file_path_i in data[seq_str]:
-
-                file = os.path.basename(file_path_i)[:-4] +'.pt'
-                file_path = os.path.join(sequence_path, file)
-                
-                if os.path.exists(file_path):
-                    vec = torch.load(file_path).to(torch.float32) 
-                    
-                    self.samples.append(vec)
-                    self.labels.append(self.seq_to_idx[seq])
-        
-                    print(file_path_i, self.seq_to_idx[seq])
-                               
-
-    def __len__(self):
-        return len(self.samples)
-
-    def __getitem__(self, idx):
-        return self.samples[idx], self.labels[idx]
-"""
 
 class multiSequenceDataset(Dataset):
-    def __init__(self, list_seq, data, root_path, target_label):
+    def __init__(self, list_seq, data, root_path, target_label, saved_descriptor_folder):
         self.samples = []
         self.labels = []
         self.seq_to_idx = {seq: i for i, seq in enumerate(list_seq)}
 
         for seq in list_seq:
             seq_str = seq
-            sequence_path = os.path.join(root_path, "256_desc_2025-06-23_11-22-13_run_0_4")
+            sequence_path = os.path.join(root_path, saved_descriptor_folder)
 
             for file_path_i in data[seq_str]:
                 file = os.path.basename(file_path_i)[:-4] + '.pt'
@@ -63,11 +33,6 @@ class multiSequenceDataset(Dataset):
                     #  lookup the correct multi-hot label from your dict
                     if file in target_label:
                         label = target_label[file]
-                    """
-                    else:
-                        # if missing, create a zero tensor
-                        label = torch.zeros(len(list_seq))
-                    """
 
                     self.samples.append(vec)
                     self.labels.append(label)
@@ -247,8 +212,6 @@ def main():
     train_indicesd = load_set_ids("zone_D_dsi_train_list.json")
 
     data = {"A0": train_indicesa, "B0": train_indicesb, "C0": train_indicesc, "D0": train_indicesd}
-    #dataset =  multiSequenceDataset(list_seq, data, root_path)
-    #dataloader = DataLoader(dataset, batch_size=256, shuffle=True)
 
     
     val_indicesa = load_set_ids("zone_A_dsi_val_list.json")
@@ -257,8 +220,6 @@ def main():
     val_indicesd = load_set_ids("zone_D_dsi_val_list.json")
 
     data_val = {"A0": val_indicesa, "B0": val_indicesb, "C0": val_indicesc, "D0": val_indicesd}
-    #dataset_val =  multiSequenceDataset(list_seq, data, root_path)
-    #dataloader_val = DataLoader(dataset, batch_size=256, shuffle=True)
 
     
 
@@ -268,8 +229,7 @@ def main():
     eval_indicesd = load_set_ids("zone_D_dsi_eval_list.json")
 
     data_eval = {"A0": eval_indicesa, "B0": eval_indicesb, "C0": eval_indicesc, "D0": eval_indicesd}
-    #dataset_eval =  multiSequenceDataset(list_seq, data, root_path)
-    #dataloader_eval = DataLoader(dataset, batch_size=256, shuffle=True)
+
 
     print("train len ", len(train_indicesa + train_indicesb + train_indicesc + train_indicesd) )
     print("val len ", len(val_indicesa + val_indicesb + val_indicesc + val_indicesd) )
@@ -358,27 +318,21 @@ def main():
     print( target_label['LHD_FXX_0656_6861_PTS_O_LAMB93_IGN69.copc_10_10_45.pt'] )
 
     print("loading train set")
-    dataset =  multiSequenceDataset(list_seq, data, root_path, target_label)
+    dataset =  multiSequenceDataset(list_seq, data, root_path, target_label, saved_descriptor_folder)
     dataloader = DataLoader(dataset, batch_size=256, shuffle=True)
     print("loaded train set")
 
     print("loading val set")
-    dataset_val =  multiSequenceDataset(list_seq, data, root_path, target_label)
+    dataset_val =  multiSequenceDataset(list_seq, data, root_path, target_label, saved_descriptor_folder)
     dataloader_val = DataLoader(dataset, batch_size=256, shuffle=True)
     print("loaded val set")
     
     print("loading eval set")
-    dataset_eval =  multiSequenceDataset(list_seq, data, root_path, target_label)
+    dataset_eval =  multiSequenceDataset(list_seq, data, root_path, target_label, saved_descriptor_folder)
     dataloader_eval = DataLoader(dataset, batch_size=256, shuffle=True)
     print("loaded eval set")
     
 
-
-    
-    
-    
-    #dataloader = DataLoader(dataset, batch_size=1024, shuffle=True)
-    # https://pytorch.org/tutorials/beginner/basics/buildmodel_tutorial.html
 
     print("Initialize model")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -387,11 +341,7 @@ def main():
     print("model", model)
     
     print("Define loss and optimizer")
-    #criterion = nn.CrossEntropyLoss()
     criterion = nn.BCEWithLogitsLoss()
-
-    
-    #optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     optimizer = optim.Adam(model.parameters(), lr=0.002)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
@@ -453,10 +403,6 @@ def main():
                 
                 # Track performance
                 total_loss += loss_valid.item()
-                """
-                _, predicted = torch.max(outputs, 1)
-                correct += (predicted == labels).sum().item()
-                """
 
                 predicted = (torch.sigmoid(outputs) > 0.5).float()
                 correct += ((predicted == labels).all(dim=1)).sum().item()
@@ -475,10 +421,6 @@ def main():
     model.load_state_dict(torch.load(model_name, map_location=device))
     model.eval()
 
-
-
-
-    
     
     # evaluation
     print("start evaluation")
@@ -486,7 +428,7 @@ def main():
     hit, num = 0, 0
     seen_proba = []
     for seq in list_seq:
-            sequence_path = os.path.join(root_path, "256_desc_2025-06-23_11-22-13_run_0_4")
+            sequence_path = os.path.join(root_path, saved_descriptor_folder)
             seq_str = seq
         
             for file_path_i in data_eval[seq_str]:

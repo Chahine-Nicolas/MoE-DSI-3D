@@ -7,18 +7,19 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 
 list_seq = ["A0", "B0", "C0", "D0"] 
-root_path = "/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/lidarhd_v2"
+root_path = "../lidarhd_EAST"
+saved_descriptor_folder = "desc_2025-06-23_11-22-13"
 
 
 class multiSequenceDataset(Dataset):
-    def __init__(self, list_seq, data, root_path):
+    def __init__(self, list_seq, data, root_path, saved_descriptor_folder):
         self.samples = []
         self.labels = []
-        self.seq_to_idx = {seq: i for i, seq in enumerate(list_seq)}  # converti 0,2,5 en 0,1,2..
+        self.seq_to_idx = {seq: i for i, seq in enumerate(list_seq)}
 
         for seq in list_seq:
             seq_str = seq
-            sequence_path = os.path.join(root_path, "256_desc_2025-06-23_11-22-13_run_0_4")
+            sequence_path = os.path.join(root_path, saved_descriptor_folder)
         
             for file_path_i in data[seq_str]:
 
@@ -47,10 +48,6 @@ def load_set_ids(train_indices_path):
     train_indices = json.load(f)
     f.close()
     return train_indices
-
-
-
-
 
 
 class SequenceDataset(Dataset):
@@ -95,27 +92,6 @@ class SequenceDataset(Dataset):
     def __getitem__(self, idx):
         return self.samples[idx], self.labels[idx]
 
-
-
-"""
-
-#GATE 1
-class ExpertClassifier(nn.Module):
-    def __init__(self, input_dim=256, num_experts=len(list_seq)):
-        super(ExpertClassifier, self).__init__()
-        self.model = nn.Sequential(
-            nn.Linear(input_dim, num_experts),
-        )
-
-    def forward(self, x):
-        return self.model(x)
-
-
-
-"""
-
-
-#GATE 2
 class ExpertClassifier(nn.Module):
     def __init__(self, input_dim=256, num_experts=len(list_seq)):
         super(ExpertClassifier, self).__init__()
@@ -138,34 +114,6 @@ class ExpertClassifier(nn.Module):
     def forward(self, x):
         return self.model(x)
         
-
-"""
-class ExpertClassifier(nn.Module):
-    def __init__(self, input_dim=256, num_experts=len(list_seq)):
-        super(ExpertClassifier, self).__init__()
-        self.model = nn.Sequential(
-            nn.Linear(input_dim, 256),
-            nn.BatchNorm1d(256),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-        
-            nn.Linear(256, 512),
-            nn.BatchNorm1d(512),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-        
-            nn.Linear(512, 128),
-            nn.BatchNorm1d(128),
-            nn.ReLU(),
-            nn.Dropout(0.1),
-        
-            nn.Linear(128, num_experts)
-        )
-    
-    def forward(self, x):
-        return self.model(x)
-"""
-
 def predict_expert(model, feature_vector, device):
     with torch.no_grad():
         feature_vector = feature_vector.to(device).unsqueeze(0)  # Add batch dimension
@@ -182,7 +130,7 @@ def predict_expert(model, feature_vector, device):
 
 def main():
 
-    with open("/lustre/fswork/projects/rech/dki/ujo91el/code/these_place_reco/LoGG3D-Net/config/kitti_tuples/is_revisit_D-3_T-30.json") as f:
+    with open("../LoGG3D-Net/config/kitti_tuples/is_revisit_D-3_T-30.json") as f:
         data = json.load(f)
 
     device = 'cuda'
@@ -196,7 +144,7 @@ def main():
     train_indicesd = load_set_ids("zone_D_dsi_train_list.json")[:64] 
 
     data = {"A0": train_indicesa, "B0": train_indicesb, "C0": train_indicesc, "D0": train_indicesd}
-    dataset =  multiSequenceDataset(list_seq, data, root_path)
+    dataset =  multiSequenceDataset(list_seq, data, root_path, saved_descriptor_folder)
     dataloader = DataLoader(dataset, batch_size=256, shuffle=True)
 
     
@@ -206,7 +154,7 @@ def main():
     val_indicesd = load_set_ids("zone_D_dsi_val_list.json")[:64] 
 
     data_val = {"A0": val_indicesa, "B0": val_indicesb, "C0": val_indicesc, "D0": val_indicesd}
-    dataset_val =  multiSequenceDataset(list_seq, data, root_path)
+    dataset_val =  multiSequenceDataset(list_seq, data, root_path, saved_descriptor_folder)
     dataloader_val = DataLoader(dataset, batch_size=256, shuffle=True)
 
     
@@ -217,24 +165,12 @@ def main():
     eval_indicesd = load_set_ids("zone_D_dsi_eval_list.json")[:64] 
 
     data_eval = {"A0": eval_indicesa, "B0": eval_indicesb, "C0": eval_indicesc, "D0": eval_indicesd}
-    dataset_eval =  multiSequenceDataset(list_seq, data, root_path)
+    dataset_eval =  multiSequenceDataset(list_seq, data, root_path, saved_descriptor_folder)
     dataloader_eval = DataLoader(dataset, batch_size=256, shuffle=True)
    
     data = {"A0": eval_indicesa, "B0": eval_indicesb, "C0": eval_indicesc, "D0": eval_indicesd}
-    dataset =  multiSequenceDataset(list_seq, data, root_path)
+    dataset =  multiSequenceDataset(list_seq, data, root_path, saved_descriptor_folder)
     dataloader = DataLoader(dataset, batch_size=256, shuffle=True)
-
-
-    """
-    (Pdb) train_indicesa[0]
-    '/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/lidarhd_v2/bin/LHD_FXX_0656_6860_PTS_O_LAMB93_IGN69.copc_10_10_46.bin'
-    (Pdb) val_indicesa[0]
-    '/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/lidarhd_v2/bin/LHD_FXX_0656_6860_PTS_O_LAMB93_IGN69.copc_10_10_47.bin'
-    (Pdb) eval_indicesa[0]
-    '/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/lidarhd_v2/bin/LHD_FXX_0656_6860_PTS_O_LAMB93_IGN69.copc_10_10_48.bin'
-    """
-
-    
 
     
     eval_indicesa = load_set_ids("small_list_A.json")[:64] 
@@ -243,50 +179,11 @@ def main():
     eval_indicesd = load_set_ids("small_list_D.json")[:64] 
 
     data_eval = {"A0": train_indicesa, "B0": train_indicesb, "C0": train_indicesc, "D0": train_indicesd}
-    dataset_eval =  multiSequenceDataset(list_seq, data, root_path)
+    dataset_eval =  multiSequenceDataset(list_seq, data, root_path, saved_descriptor_folder)
     dataloader_eval = DataLoader(dataset, batch_size=256, shuffle=True)
 
     import pdb; pdb.set_trace()
-
-    """
-    (Pdb) train_indicesa[0]
-    '/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/lidarhd_v2/bin/LHD_FXX_0656_6860_PTS_O_LAMB93_IGN69.copc_10_10_46.bin'
-    (Pdb) val_indicesa[0]
-    '/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/lidarhd_v2/bin/LHD_FXX_0656_6860_PTS_O_LAMB93_IGN69.copc_10_10_47.bin'
-    (Pdb) eval_indicesa[0]
-    '/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/lidarhd_v2/bin/LHD_FXX_0656_6860_PTS_O_LAMB93_IGN69.copc_17_10_47.bin'
-    (Pdb) 
-    """
-
     
-    """
-    
-    # mini dataset
-
-    train_indicesa = load_training_set_ids("small_list_A.json", "small_list_A.json")
-    train_indicesb = load_training_set_ids("small_list_B.json", "small_list_B.json")
-    train_indicesc = load_training_set_ids("small_list_C.json", "small_list_C.json")
-    train_indicesd = load_training_set_ids("small_list_D.json", "small_list_D.json")
- 
-    
-    data = {"A0": train_indicesa, "B0": train_indicesb, "C0": train_indicesc, "D0": train_indicesd}
-
-    data = {"A0": train_indicesa[:8], "B0": train_indicesb[:8], "C0": train_indicesc[:8], "D0": train_indicesd[:8]}
-    data_eval = {"A0": train_indicesa[8:], "B0": train_indicesb[8:], "C0": train_indicesc[8:], "D0": train_indicesd[8:]}
-    
-    dataset =  multiSequenceDataset(list_seq, data, root_path)
-    dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
-
-    dataset_eval =  multiSequenceDataset(list_seq, data, root_path)
-    dataloader_eval = DataLoader(dataset_eval, batch_size=32, shuffle=True)
-    """
-
-
-    
-    #dataloader = DataLoader(dataset, batch_size=1024, shuffle=True)
-    
-    # https://pytorch.org/tutorials/beginner/basics/buildmodel_tutorial.html
-
     print("Initialize model")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = ExpertClassifier().to(device)
@@ -362,8 +259,6 @@ def main():
     model.load_state_dict(torch.load(model_name, map_location=device))
     model.eval()
 
-
-    
     
     
     # evaluation

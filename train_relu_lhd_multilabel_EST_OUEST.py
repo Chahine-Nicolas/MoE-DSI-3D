@@ -11,19 +11,19 @@ list_seq2 = ["A0", "B0", "C0", "D0"]
 list_seq = ["A1", "B1", "C1", "D1", "E1", "A0", "B0", "C0", "D0"]
 
 
-root_path1 = "/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/lidarhd_v3"
-root_path2 = "/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/lidarhd_v2"
-
+root_path1 = "../lidarhd_WEST"
+root_path2 = "../lidarhd_EAST"
+saved_descriptor_folder = "desc_2025-06-23_11-22-13"
 
 class multiSequenceDataset(Dataset):
-    def __init__(self, list_seq, data, root_path, target_label):
+    def __init__(self, list_seq, data, root_path, target_label, saved_descriptor_folder):
         self.samples = []
         self.labels = []
         self.seq_to_idx = {seq: i for i, seq in enumerate(list_seq)}
 
         for seq in list_seq:
             seq_str = seq
-            sequence_path = os.path.join(root_path, "256_desc_2025-06-23_11-22-13_run_0_4")
+            sequence_path = os.path.join(root_path, saved_descriptor_folder)
 
             for file_path_i in data[seq_str]:
                 file = os.path.basename(file_path_i)[:-4] + '.pt'
@@ -144,14 +144,11 @@ def predict_expert(model, feature_vector, device, threshold=0.5):
 
 def main():
 
-    with open("/lustre/fswork/projects/rech/dki/ujo91el/code/these_place_reco/LoGG3D-Net/config/kitti_tuples/is_revisit_D-3_T-30.json") as f:
+    with open("../LoGG3D-Net/config/kitti_tuples/is_revisit_D-3_T-30.json") as f:
         data = json.load(f)
 
     device = 'cuda'
     print("Load dataset")
-
- 
-
 
     # LOAD OUEST
     train_indicesa = load_set_ids("zone_A_dsi_train_list.json")
@@ -305,8 +302,8 @@ def main():
 
     ########################################################
     print("loading train set")
-    dataset =  multiSequenceDataset(list_seq1, data, root_path1, target_label)
-    dataset2 =  multiSequenceDataset(list_seq2, data2, root_path2, target_label)
+    dataset =  multiSequenceDataset(list_seq1, data, root_path1, target_label, saved_descriptor_folder)
+    dataset2 =  multiSequenceDataset(list_seq2, data2, root_path2, target_label, saved_descriptor_folder)
     print("dataset ",  len(dataset))
     print("dataset2 ", len(dataset2))
     dataset_combine = dataset + dataset2
@@ -318,8 +315,8 @@ def main():
 
     ########################################################
     print("loading val set")
-    dataset_val =  multiSequenceDataset(list_seq1, data, root_path1, target_label)
-    dataset_val2 =  multiSequenceDataset(list_seq2, data2, root_path2, target_label)
+    dataset_val =  multiSequenceDataset(list_seq1, data, root_path1, target_label, saved_descriptor_folder)
+    dataset_val2 =  multiSequenceDataset(list_seq2, data2, root_path2, target_label, saved_descriptor_folder)
     print("dataset ",  len(dataset_val))
     print("dataset2 ", len(dataset_val2))
     dataset_combine = dataset_val + dataset_val2
@@ -332,8 +329,8 @@ def main():
 
     ########################################################
     print("loading eval set")
-    dataset_eval =  multiSequenceDataset(list_seq1, data, root_path1, target_label)
-    dataset_eval2 =  multiSequenceDataset(list_seq2, data2, root_path2, target_label)
+    dataset_eval =  multiSequenceDataset(list_seq1, data, root_path1, target_label, saved_descriptor_folder)
+    dataset_eval2 =  multiSequenceDataset(list_seq2, data2, root_path2, target_label, saved_descriptor_folder)
 
     print("dataset_eval ",  len(dataset_eval))
     print("dataset_eval2 ", len(dataset_eval2))
@@ -439,7 +436,7 @@ def main():
                 root_path = root_path1
             elif seq in list_seq2:
                 root_path = root_path2
-            sequence_path = os.path.join(root_path, "256_desc_2025-06-23_11-22-13_run_0_4")
+            sequence_path = os.path.join(root_path, saved_descriptor_folder)
             seq_str = seq
         
             for file_path_i in data_eval[seq_str]:
