@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import glob
 import os
 
-def plot_dataset(path = '/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/lidarhd_v2/bin/', dataset="full_eval_list.json", poses = "poses_grid2.json", title ='Dataset division', color='green'):  
+def plot_dataset(path = '../lidarhd_EAST/bin/', dataset="full_eval_list.json", poses = "poses_grid2.json", title ='Dataset division', color='green'):  
     f = open(path[:-4] + dataset) 
     dataset_list = json.load(f)
     f.close()

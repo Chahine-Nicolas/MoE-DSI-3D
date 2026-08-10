@@ -49,17 +49,17 @@ def get_logg3d_net_desc(data_dict, eval_seq='00', voxel_size=0.1, random_rotatio
     model = get_pipeline('LOGG3D')
     
     if eval_seq == '00' or eval_seq == '22' :
-        save_path =  "/lustre/fswork/projects/rech/dki/ujo91el/checkpoint/LoGG3D-NET/checkpoints/kitti_10cm_loo/2021-09-14_03-43-02_3n24h_Kitti_v10_q29_10s0_262447.pth"
+        save_path =  "../checkpoint/LoGG3D-NET/checkpoints/kitti_10cm_loo/2021-09-14_03-43-02_3n24h_Kitti_v10_q29_10s0_262447.pth"
     elif eval_seq == '02':
-        save_path =  '/lustre/fswork/projects/rech/dki/ujo91el/checkpoint/LoGG3D-NET/checkpoints/kitti_10cm_loo/2021-09-14_05-55-20_3n24h_Kitti_v10_q29_10s2_262448.pth'
+        save_path =  '../checkpoint/LoGG3D-NET/checkpoints/kitti_10cm_loo/2021-09-14_05-55-20_3n24h_Kitti_v10_q29_10s2_262448.pth'
     elif eval_seq == '05':
-        save_path =  '/lustre/fswork/projects/rech/dki/ujo91el/checkpoint/LoGG3D-NET/checkpoints/kitti_10cm_loo/2021-09-14_06-11-58_3n24h_Kitti_v10_q29_10s5_262449.pth'
+        save_path =  '../checkpoint/LoGG3D-NET/checkpoints/kitti_10cm_loo/2021-09-14_06-11-58_3n24h_Kitti_v10_q29_10s5_262449.pth'
     elif eval_seq == '06':
-        save_path =  '/lustre/fswork/projects/rech/dki/ujo91el/checkpoint/LoGG3D-NET/checkpoints/kitti_10cm_loo/2021-09-14_06-43-47_3n24h_Kitti_v10_q29_10s6_262450.pth'
+        save_path =  '../checkpoint/LoGG3D-NET/checkpoints/kitti_10cm_loo/2021-09-14_06-43-47_3n24h_Kitti_v10_q29_10s6_262450.pth'
     elif eval_seq == '07':
-        save_path =  '/lustre/fswork/projects/rech/dki/ujo91el/checkpoint/LoGG3D-NET/checkpoints/kitti_10cm_loo/2021-09-14_08-34-46_3n24h_Kitti_v10_q29_10s7_262451.pth'
+        save_path =  '../checkpoint/LoGG3D-NET/checkpoints/kitti_10cm_loo/2021-09-14_08-34-46_3n24h_Kitti_v10_q29_10s7_262451.pth'
     elif eval_seq == '08':
-        save_path =  '/lustre/fswork/projects/rech/dki/ujo91el/checkpoint/LoGG3D-NET/checkpoints/kitti_10cm_loo/2021-09-14_20-28-22_3n24h_Kitti_v10_q29_10s8_263169.pth'
+        save_path =  '../checkpoint/LoGG3D-NET/checkpoints/kitti_10cm_loo/2021-09-14_20-28-22_3n24h_Kitti_v10_q29_10s8_263169.pth'
 
     checkpoint = torch.load(save_path)  # ,map_location='cuda:0')
     model.load_state_dict(checkpoint['model_state_dict'])

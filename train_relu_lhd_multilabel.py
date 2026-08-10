@@ -97,21 +97,6 @@ class SequenceDataset(Dataset):
         return self.samples[idx], self.labels[idx]
 
 
-
-"""
-#GATE 1
-class ExpertClassifier(nn.Module):
-    def __init__(self, input_dim=256, num_experts=len(list_seq)):
-        super(ExpertClassifier, self).__init__()
-        self.model = nn.Sequential(
-            nn.Linear(input_dim, num_experts),
-        )
-
-    def forward(self, x):
-        return self.model(x)
-"""
-
-
 #GATE 2
 class ExpertClassifier(nn.Module):
     def __init__(self, input_dim=256, num_experts=len(list_seq)):
@@ -135,49 +120,6 @@ class ExpertClassifier(nn.Module):
     def forward(self, x):
         return self.model(x)
 
-
-"""
-class ExpertClassifier(nn.Module):
-    def __init__(self, input_dim=256, num_experts=len(list_seq)):
-        super(ExpertClassifier, self).__init__()
-        self.model = nn.Sequential(
-            nn.Linear(input_dim, 256),
-            nn.BatchNorm1d(256),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-        
-            nn.Linear(256, 512),
-            nn.BatchNorm1d(512),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-        
-            nn.Linear(512, 128),
-            nn.BatchNorm1d(128),
-            nn.ReLU(),
-            nn.Dropout(0.1),
-        
-            nn.Linear(128, num_experts)
-        )
-    
-    def forward(self, x):
-        return self.model(x)
-"""
-
-
-"""
-def predict_expert(model, feature_vector, device):
-    with torch.no_grad():
-        feature_vector = feature_vector.to(device).unsqueeze(0)  # Add batch dimension
-        output = model(feature_vector)
-        predicted_expert_idx = torch.argmax(output).item()
-        print("output", output)
-        # probac
-        m = nn.Softmax(dim=1)
-        prob_seq = m(output)
-
-    return li
-"""
-
 def predict_expert(model, feature_vector, device, threshold=0.5):
     with torch.no_grad():
         feature_vector = feature_vector.to(device).unsqueeze(0)  # [1, 256]
@@ -198,7 +140,7 @@ def predict_expert(model, feature_vector, device, threshold=0.5):
 
 def main():
 
-    with open("/lustre/fswork/projects/rech/dki/ujo91el/code/these_place_reco/LoGG3D-Net/config/kitti_tuples/is_revisit_D-3_T-30.json") as f:
+    with open("../LoGG3D-Net/config/kitti_tuples/is_revisit_D-3_T-30.json") as f:
         data = json.load(f)
 
     device = 'cuda'
@@ -274,14 +216,7 @@ def main():
 
     print(len(path_to_ids))
 
-    """
-    (Pdb) path
-    '/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/lidarhd_v2/bin/LHD_FXX_0656_6861_PTS_O_LAMB93_IGN69.copc_10_10_45.bin'
-    (Pdb) path in val_indicesa
-    True
-    (Pdb) path in val_indicesb
-    True
-    """
+
     
     all_names = [
         eval_indicesa,

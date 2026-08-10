@@ -167,7 +167,7 @@ def moe_training(model, eval_subset, eval_set, eval_indices, eval_loader, data_c
     dictio_to_save = []
     print("Start looop")
 
-    checkpoint_paths = ["/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_lhd_long_indx_shuffle/checkpoint-1000/pytorch_model.bin","/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_lhd_long_indx_zone_B0_1m/checkpoint-4300/pytorch_model.bin"]
+    checkpoint_paths = ["../checkpoints/../checkpoint-1000/pytorch_model.bin","../checkpoints/../checkpoint-4300/pytorch_model.bin"]
     transformer_list = []
     
     for chkp in checkpoint_paths:

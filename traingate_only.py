@@ -8,7 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 
 list_seq = [0, 2, 5, 6, 7, 8] 
 length_seq = [4541, 4661, 2701, 1101, 1101, 4071]
-root_path = "/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/datasets/sequences/"
+root_path = "../sequences/"
 
 
 class multiSequenceDataset(Dataset):
@@ -112,7 +112,7 @@ def predict_expert(model, feature_vector, device):
 
 def main():
 
-    with open("/lustre/fswork/projects/rech/dki/ujo91el/code/these_place_reco/LoGG3D-Net/config/kitti_tuples/is_revisit_D-3_T-30.json") as f:
+    with open("../LoGG3D-Net/config/kitti_tuples/is_revisit_D-3_T-30.json") as f:
         data = json.load(f)
 
     device = 'cuda'

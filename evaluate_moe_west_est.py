@@ -156,13 +156,13 @@ def eval_log3dnet(model, eval_subset1, eval_set1, eval_indices1, eval_subset2, e
 
 
         
-        root_path1 = "/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/lidarhd_v3"
+        root_path1 = "../lidarhd_WEST"
         sequence_path = root_path1 + "/"
         with open(sequence_path + "poses_grid2.json") as f: 
             positions_database1 = json.load(f)
 
         
-        root_path2 = "/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/lidarhd_v2"
+        root_path2 = "../lidarhd_EAST"
         sequence_path = root_path2 + "/"
         with open(sequence_path + "poses_grid2.json") as f: 
             positions_database2 = json.load(f)

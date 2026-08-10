@@ -194,47 +194,7 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
     prep_timer, desc_timer, ret_timer = Timer(), Timer(), Timer()
 
     chkp = checkpoint_dir +  "/" + checkp_to_eval + "/pytorch_model.bin" # tous
-    chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_lhd_long_indx_shuffle/"  + checkp_to_eval + "/pytorch_model.bin" # tous
-    chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_lhd_long_indx_zone_ALL_1m/"  + checkp_to_eval + "/pytorch_model.bin" # tous
-    chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_lhd_long_indx_zone_A0_p20_extd0_linear/checkpoint-1300/pytorch_model.bin" # A0
-    chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_lhd_long_indx_zone_A0_p12_beam10_pad/checkpoint-1700/pytorch_model.bin" # A0
-    chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_resume/checkpoint-7300/pytorch_model.bin"
-    chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_beam10_rerun_linear_256/checkpoint-3000/pytorch_model.bin"
-    chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_beam10_voc35000_linear_256_64val/checkpoint-3700/pytorch_model.bin"
 
-    chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_beam10_voc35000_linear_256_64val2/checkpoint-2200/pytorch_model.bin"
-
-    chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_beam10_voc1000_linear_256_64val6/checkpoint-1300/pytorch_model.bin"
-    
-    chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_beam10_voc300_linear_128_64val8/checkpoint-7300/pytorch_model.bin"
-
-
-    
-    #chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin"
-    #chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_B0/checkpoint-7200/pytorch_model.bin"
-    #chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_C02/checkpoint-7000/pytorch_model.bin"
-    chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_new_tokenizer_D0/checkpoint-6100/pytorch_model.bin"
-
-    chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_DO2/checkpoint-1400/pytorch_model.bin"
-
-    chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_EST/checkpoint-2800/pytorch_model.bin"
-
-    chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_EST_full_80/checkpoint-6800/pytorch_model.bin"
-
-    chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_A1/checkpoint-4100/pytorch_model.bin"
-    #chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_B1/checkpoint-4200/pytorch_model.bin"
-    #chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_C1/checkpoint-4200/pytorch_model.bin"
-    #chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_D1_v2/checkpoint-4300/pytorch_model.bin"
-    #chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_E1/checkpoint-4100/pytorch_model.bin"
-    
-    #chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_C1/checkpoint-1700/pytorch_model.bin"
-
-    #chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_ouest_v2/checkpoint-9400/pytorch_model.bin"
-    #chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_ouest_v3/checkpoint-11500/pytorch_model.bin"
-    #chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_ouest_v4_suite/checkpoint-7400/pytorch_model.bin"
-
-    #chkp = "/lustre/fswork/projects/rech/dki/ujo91el/checkpoints/git_hilbert_train_ouest_est/checkpoint-5300/pytorch_model.bin"
-    
     print("load "+ chkp)
     state_dict = torch.load(chkp)
 

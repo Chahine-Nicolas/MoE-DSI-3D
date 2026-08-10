@@ -7,7 +7,7 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 
 list_seq = ["A0", "B0", "C0", "D0"] 
-root_path = "/lustre/fsn1/worksf/projects/rech/dki/ujo91el/datas/lidarhd_v2"
+root_path = "../lidarhd_EAST"
 
 
 class multiSequenceDataset(Dataset):
@@ -96,53 +96,6 @@ class SequenceDataset(Dataset):
     def __getitem__(self, idx):
         return self.samples[idx], self.labels[idx]
 
-
-"""
-class ExpertClassifier(nn.Module):
-    def __init__(self, input_dim=256, num_experts=len(list_seq)):
-        super(ExpertClassifier, self).__init__()
-        self.model = nn.Sequential(
-            nn.Linear(input_dim, 256),
-            nn.ReLU(),
-            nn.Dropout(0.3),  # Dropout 30%
-
-            nn.Linear(256, 128),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, num_experts)
-        )
-
-    def forward(self, x):
-        return self.model(x)
-
-
-class ExpertClassifier(nn.Module):
-    def __init__(self, input_dim=256, num_experts=len(list_seq)):
-        super(ExpertClassifier, self).__init__()
-        self.model = nn.Sequential(
-            nn.Linear(input_dim, 256),
-            nn.BatchNorm1d(256),
-            nn.ReLU(),
-
-            nn.Linear(256, 128),
-            nn.BatchNorm1d(128),
-            nn.ReLU(),
-
-            nn.Linear(128, 64),
-            nn.BatchNorm1d(64),
-            nn.ReLU(),
-
-            nn.Linear(64, num_experts)
-        )
-    
-    def forward(self, x):
-        return self.model(x)
-"""
-
-
 class ExpertClassifier(nn.Module):
     def __init__(self, input_dim=256, num_experts=len(list_seq)):
         super(ExpertClassifier, self).__init__()
@@ -152,42 +105,6 @@ class ExpertClassifier(nn.Module):
 
     def forward(self, x):
         return self.model(x)
-
-
-
-"""
-class ExpertClassifier(nn.Module):
-    def __init__(self, input_dim=256, num_experts=len(list_seq)):
-        super(ExpertClassifier, self).__init__()
-        self.model = nn.Sequential(
-            nn.Linear(input_dim, 256),
-            nn.BatchNorm1d(256),
-            nn.ReLU(),
-
-            nn.Linear(256, 1024),
-            nn.BatchNorm1d(1024),
-            nn.ReLU(),
-
-            nn.Linear(1024, 256),
-            nn.BatchNorm1d(256),
-            nn.ReLU(),
-
-            nn.Linear(256, num_experts)
-        )
-    
-    def forward(self, x):
-        return self.model(x)
-"""
-
-
-
-
-
-
-
-
-        
-
         
 
 def predict_expert(model, feature_vector, device):
@@ -206,19 +123,11 @@ def predict_expert(model, feature_vector, device):
 
 def main():
 
-    with open("/lustre/fswork/projects/rech/dki/ujo91el/code/these_place_reco/LoGG3D-Net/config/kitti_tuples/is_revisit_D-3_T-30.json") as f:
+    with open("../LoGG3D-Net/config/kitti_tuples/is_revisit_D-3_T-30.json") as f:
         data = json.load(f)
 
     device = 'cuda'
     print("Load dataset")
-
-
-    """
-    train_indicesa = load_training_set_ids("zone_A_dsi_train_list.json", "zone_A_dsi_val_list.json")
-    train_indicesb = load_training_set_ids("zone_B_dsi_train_list.json", "zone_B_dsi_val_list.json")
-    train_indicesc = load_training_set_ids("zone_C_dsi_train_list.json", "zone_C_dsi_val_list.json")
-    train_indicesd = load_training_set_ids("zone_D_dsi_train_list.json", "zone_D_dsi_val_list.json")
-    """
 
     train_indicesa = load_training_set_ids("small_list_A.json", "small_list_A.json")
     train_indicesb = load_training_set_ids("small_list_B.json", "small_list_B.json")
