@@ -448,8 +448,8 @@ class IndexingCollator(DataCollatorWithPadding):
     def __call__(self, features):
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        
         # Extract features
+    
         input_ids = torch.vstack([x['input_ids'] for x in features])
         labels = input_ids.clone()
         ids = [x['id'] for x in features]
@@ -462,13 +462,13 @@ class IndexingCollator(DataCollatorWithPadding):
 
         # Prepare `inputs` dictionary
         inputs = {
-            'input_ids': input_ids,
-            'labels': labels,
+            'input_ids': input_ids.to(device=device),
+            'labels': labels.to(device=device),
             'ids': ids,
             'pixel_values': pixel_values,
             'attention_mask': attention_mask.to(device=device),
         }
-
+        
         # Process LIDAR values
         lidar_values = self._prepare_lidar_values(features, device)
         inputs['lidar_values'] = lidar_values
@@ -476,7 +476,7 @@ class IndexingCollator(DataCollatorWithPadding):
         # Load LIDAR data to GPU if available
         if device == "cuda":
             load_data_to_gpu(inputs['lidar_values'])
-            
+
         return inputs
 
     def _prepare_lidar_values(self, features, device):
@@ -485,19 +485,12 @@ class IndexingCollator(DataCollatorWithPadding):
         feature_dict = {k: [x[k] for x in features] for k in features[0].keys()}
         
         for key, val in feature_dict.items():
-            if key == 'points':
-        
-                padded_points = [torch.nn.functional.pad(
-                    torch.tensor(coor, dtype=torch.float32),
-                    (0, 0, 1, 0), 
-                    value=i  
-                ) for i, coor in enumerate(val)]
-                lidar_val[key] = torch.cat(padded_points, dim=0).to(device)
-            elif key == 'desc':
+            if key in ['frame_id', 'id_pcd_positif', 'id_pcd_negatif', 'other_id_pcd_negatif']:
+                lidar_val[key] = np.stack(val, axis=0) 
+                
+            if key in ['frame_id_desc', 'id_pcd_positif_desc', 'id_pcd_negatif_desc', 'other_id_pcd_negatif_desc']:
                 lidar_val[key] = val 
-            else:
-                lidar_val[key] = np.stack(val, axis=0)  
-        
+                
         return lidar_val
         ##############################################################################
         ##############################################################################
@@ -902,7 +895,8 @@ def main():
     def load_json(filepath):
         with open(filepath, "r") as f:
             return json.load(f)
-    lid = load_json(sequence_path + "/hilbert_12_pad.json") 
+    #lid = load_json(sequence_path + "/hilbert_12_pad.json") 
+    lid = load_json(sequence_path + "/hilbert_13_pad.json") 
     #lid = load_json(sequence_path + "/hilbert_p20_extd.json") 
     
     lid = lid.keys()   
@@ -989,7 +983,8 @@ def main():
     def load_json(filepath):
         with open(filepath, "r") as f:
             return json.load(f)
-    lid = load_json(sequence_path + "/hilbert_12_pad.json")
+    #lid = load_json(sequence_path + "/hilbert_12_pad.json")
+    lid = load_json(sequence_path + "/hilbert_13_pad.json")
     #lid = load_json(sequence_path + "/hilbert_p20_extd.json")
     
     lid = lid.keys()
@@ -1008,6 +1003,10 @@ def main():
 
 
 
+    
+    
+    #sprefix_dict = []
+    ############################################################
     
     # restrict code version DSI
     
@@ -1107,18 +1106,13 @@ def main():
         if args.local_rank == 0 :
             print("train_set.labeltype ",train_set.labeltype)
         if train_set.labeltype in {"gps", "hierarchical", "hilbert"}:
-            # label_mapping = load_json(sequence_path + f"/{train_set.labeltype}.json")
-            
-            label_mapping = load_json(sequence_path + "/hilbert_12_pad.json")
-            label_mapping_val = load_json(sequence_path + "/hilbert_12_pad_val.json")
-            
-            print("label_mapping_path ", sequence_path + "/hilbert_12_pad_val.json")
+            #label_mapping = load_json(sequence_path + "/hilbert_12_pad.json")
+            #label_mapping_val = load_json(sequence_path + "/hilbert_12_pad_val.json")
+            #print("label_mapping_path ", sequence_path + "/hilbert_12_pad_val.json")
 
-            """
-            label_mapping = load_json(sequence_path + "/hilbert_p20_extd.json")
-            label_mapping_val = load_json(sequence_path + "/hilbert_p20_extd.json")
-            print("label_mapping_path ", sequence_path + "/hilbert_p20_extd.json")
-            """
+            label_mapping = load_json(sequence_path + "/hilbert_13_pad.json")
+            label_mapping_val = load_json(sequence_path + "/hilbert_13_pad_val.json")
+            print("label_mapping_path ", sequence_path + "/hilbert_13_pad_val.json")
             
             print("len(label_mapping)", len(label_mapping))
 
@@ -1130,9 +1124,6 @@ def main():
         print("len(label_mapping.keys()) ", len(label_mapping.keys()))  # 20892
         print("diff ", set(lid).difference(label_mapping.keys())  )  #{'03056', '54175', '04577', '04451', '33475', '07829', '03130', '54142'}
 
-
-
-        
         train_subset = torch.utils.data.Subset(train_set, train_indices)
 
         if args.local_rank == 0 :
@@ -1201,6 +1192,7 @@ def main():
                 id_max_length=ID_MAX_LENGTH
             ) 
 
+  
 
         if not os.path.isdir(previous_model_path) :
             if args.local_rank == 0 :
@@ -1216,7 +1208,7 @@ def main():
         
         if is_training :
             trainer.save_model(cur_model_path)
-            trainer.state.save_to_json(os.path.join(cur_model_path, "trainer_state.json")) 
+            trainer.state.save_to_json(os.path.join(cur_m151820974112odel_path, "trainer_state.json")) 
 
     if do_eval: 
         

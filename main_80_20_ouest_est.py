@@ -613,14 +613,12 @@ def main():
     do_train = eval(args.do_train)
     do_eval = eval(args.do_eval)
     do_eval_partial = eval(args.do_eval_partial)
-    do_preprocess = eval(args.do_preprocess)
     do_dump_dict_gt = eval(args.do_dump_dict_gt)
 
     print("============================================")
     print("do_eval:"  + str(do_eval))
     print("do_train:"  + str(do_eval))
     print("do_eval_partial:"  + str(do_eval_partial))
-    print("do_preprocess: "  + str(do_preprocess))
     print("do_dump_dict_gt: "  + str(do_dump_dict_gt))
     print("============================================")
 
@@ -1251,13 +1249,6 @@ def main():
         if args.local_rank == 0 :
             print("start eval")
         eval_log3dnet(model_dsi, eval_subset, eval_set, eval_indices, eval_loader, data_collator, tokenizer, cfg, checkpoint_dir, checkp_to_eval, prefix_dict, LIK, ID_MAX_LENGTH)
-
-    """ # in separate file
-    if do_preprocess  :
-        compute_hierarchical_clustering(train_subset,train_set,data_collator,tokenizer,cfg)        
-        model_dsi.eval()
-        eval_log3dnet(model_dsi, eval_subset, eval_set, data_collator, tokenizer, cfg)
-    """
 
 if __name__ == '__main__':
     main()
