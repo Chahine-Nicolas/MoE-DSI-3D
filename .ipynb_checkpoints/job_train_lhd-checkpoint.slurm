@@ -66,7 +66,7 @@ ADAM_BETA1=0.90
 ADAM_BETA2=0.999
 
 WARMUP_STEPS=100 
-LR_SCHEDULER_TYPE="linear" 
+LR_SCHEDULER_TYPE="linear" # "cosine"
 LOGGING_STEPS=1 
 RESUME_CHECKPOINT=false
 
@@ -76,7 +76,7 @@ RESUME_CHECKPOINT=false
 
 CONFIG_NAME="config_lhd_${LABEL_MODE}.yaml" 
 CHECKPOINT="../ckpts/gd_mae_finetune_kitti.pth" 
-EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_train_ouest" 
+EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_train_west" 
 OUTPUT_DIR="${WORK}/checkpoints/${EXTRA_TAG}" 
 EVAL_CHECKPOINT="../checkpoints/${EXTRA_TAG}/"
 

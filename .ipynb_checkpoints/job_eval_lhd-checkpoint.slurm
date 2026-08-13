@@ -1,16 +1,16 @@
-#!/bin/bash                                                                   
-#SBATCH --partition=gpu_p13                                                   
+#!/bin/bash                                                      
+#SBATCH --partition=gpu_p13                                                 
 #SBATCH --nodes=1                                                               
 #SBATCH --ntasks-per-node=1    
-#SBATCH --qos=qos_gpu-t4             
-#SBATCH --time=100:00:00                                 
+#SBATCH --qos=qos_gpu-t4                 
+#SBATCH --time=40:00:00                                 
 #SBATCH --gres=gpu:1                                                           
-#SBATCH --cpus-per-task=10                                                    
+#SBATCH --cpus-per-task=4                                                    
 #SBATCH --hint nomultithread                                                    
-#SBATCH --mail-user user@mail.com                        
-#SBATCH --job-name=eval_ouest_est                      
-#SBATCH --output=eval_full_train_ouest_est.out                  
-#SBATCH --error=eval_full_train_ouest_est.err                        
+#SBATCH --mail-user user@mail.com                          
+#SBATCH --job-name=eval_zone_ouest                             
+#SBATCH --output=file_job_eval_zone_ouest.out                 
+#SBATCH --error=file_job_eval_zone_ouest.err                        
 
 # chargement des modules                                                        
 module purge                        # new                                       
@@ -25,6 +25,7 @@ export MASTER_NODE=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n1)
 export LOG3DNET_DIR=LoGG3D_Net_code_path
 
 ## Model
+#MODEL_NAME=blip2
 MODEL_NAME=git
 DO_USE_SOP=True
 
@@ -38,18 +39,22 @@ DO_EVAL_PARTIAL="False"
 ## Prepreocessing
 DO_DUMP_DICT_GT="False"
 DO_PREPROCESS="False"
+## Old
+
 DO_PREPROCESS_ID=False
 
 ## Dataset_len
 DATASET_LEN=-1
+#DATASET_LEN=512
+#DATASET_LEN=256
 
 
 ## Eval
-EVAL_STEP=200
-BATCH_SIZE_EVAL=64
-_ou
+EVAL_STEP=2
+BATCH_SIZE_EVAL=1
+
 ## Train
-BATCH_SIZE_TRAIN=512
+BATCH_SIZE_TRAIN=2
 NUM_TRAIN_EPOCH=10000
 
 #LABEL_MODE="gps"
@@ -58,25 +63,31 @@ LABEL_MODE="hilbert"
 #LABEL_MODE="hierarchical"
 
 
-EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_eval_ouest_est_faster"
-ID_MAX_LENGTH=10
+EXTRA_TAG="git_hilbert_lhd_long_indx_zone_ouest"
 
-RESUME_CHECKPOINT="False"
+TRAINER_CHECKPOINT="False"
 
 
 EVAL_CHECKPOINT="../checkpoints/${EXTRA_TAG}/"
 #EVAL_CHECKPOINT="False"
 
+eval_chkt="checkpoint-6300" #lhd
+
+
 CHECKPOINT=../ckpts/gd_mae_finetune_kitti.pth 
 
 ## ========== Config  ========
 CONFIG_NAME=config_lhd_${LABEL_MODE}.yaml
+#EXTRA_TAG="train"
+
+
+ID_MAX_LENGTH=10
 
 
 if [ "${DO_PREPROCESS}" = "True" ]; then
     DATASET_LEN=-1    
     BATCH_SIZE_TRAIN=2    
-    BATCH_SIZE_EVAL=2
+    BATCH_SIZE_EVAL=1
     NUM_TRAIN_EPOCH=1000
     EVAL_STEP=20
 fi
@@ -89,14 +100,14 @@ fi
 
 case ${MODEL_NAME} in
     "git")
-	BATCH_SIZE_TRAIN=256
-	BATCH_SIZE_EVAL=64
+	BATCH_SIZE_TRAIN=1
+	BATCH_SIZE_EVAL=1
 	
 	ADAM_EPSILON=1e-05
 	ADAM_BETA1=0.90
-	ADAM_BETA2=0.999
-	LEARNING_RATE=5e-04
-	SAVE_STEPS=100
+	ADAM_BETA2=0.90
+	LEARNING_RATE=1e-05
+	SAVE_STEPS=200
         ;;                                                                                           
     "blip2")
 	ADAM_EPSILON=1e-05
@@ -116,8 +127,15 @@ esac
 
 export 'PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512'
 
+# if [ "${DO_PREPROCESS_ID}" = "True" ]; then
+#     python -m pdb preprocess_datasets.py \
+# 	   --launcher none \
+# 	   --cfg_file ./config_loggnet_cross_eval.yaml \
+# 	   --workers 1
+# fi
 
-python main_80_20_ouest_est.py \
+
+python main_80_20.py \
        --launcher none \
        --cfg_file ${CONFIG_NAME} \
        --save_hit_file hit_scores.txt \
@@ -132,7 +150,7 @@ python main_80_20_ouest_est.py \
        --save_to_file \
        --remove_unused_columns False \
        --dataloader_pin_memory False \
-       --output_dir ${WORK}/checkpoints/${EXTRA_TAG}/  \
+       --output_dir ${WORK}/checkpoints/${EXTRA_TAG}  \
        --adam_epsilon=${ADAM_EPSILON} \
        --adam_beta1=${ADAM_BETA1} \
        --adam_beta2=${ADAM_BETA2} \
@@ -148,9 +166,9 @@ python main_80_20_ouest_est.py \
        --do_eval_partial ${DO_EVAL_PARTIAL} \
        --do_preprocess ${DO_PREPROCESS} \
        --do_dump_dict_gt ${DO_DUMP_DICT_GT} \
-       --resume_from_checkpoint ${RESUME_CHECKPOINT} \
+       --resume_from_checkpoint ${TRAINER_CHECKPOINT} \
        --eval_checkpoint ${EVAL_CHECKPOINT}  \
        --extra_tag ${EXTRA_TAG} \
-       --warmup_steps 100 \
-       --lr_scheduler_type "linear" \
-       --logging_steps 1 #> out_${MODEL_NAME}.txt 2>&1
+       --eval_chkt ${eval_chkt}\
+       --logging_steps 1 \
+       --fix_random_seed 666 \

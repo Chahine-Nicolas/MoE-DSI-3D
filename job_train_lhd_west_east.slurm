@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-task=10                                                    
 #SBATCH --hint nomultithread                                                    
 #SBATCH --mail-user user@mail.com                          
-#SBATCH --job-name=train_ouest                      
+#SBATCH --job-name=train_west_east                      
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err                     
 
@@ -54,10 +54,10 @@ DATASET_LEN=-1
 
 
 ID_MAX_LENGTH=10
-NUM_TRAIN_EPOCH=100
+NUM_TRAIN_EPOCH=10000
 BATCH_SIZE_TRAIN=256
 BATCH_SIZE_EVAL=64
-EVAL_STEP=500
+EVAL_STEP=200
 SAVE_STEPS=100
 
 LEARNING_RATE=5e-4 
@@ -66,7 +66,7 @@ ADAM_BETA1=0.90
 ADAM_BETA2=0.999
 
 WARMUP_STEPS=100 
-LR_SCHEDULER_TYPE="linear" # "cosine"
+LR_SCHEDULER_TYPE="linear" 
 LOGGING_STEPS=1 
 RESUME_CHECKPOINT=false
 
@@ -76,7 +76,7 @@ RESUME_CHECKPOINT=false
 
 CONFIG_NAME="config_lhd_${LABEL_MODE}.yaml" 
 CHECKPOINT="../ckpts/gd_mae_finetune_kitti.pth" 
-EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_train_west" 
+EXTRA_TAG="${MODEL_NAME}_${LABEL_MODE}_train_west_east"
 OUTPUT_DIR="${WORK}/checkpoints/${EXTRA_TAG}" 
 EVAL_CHECKPOINT="../checkpoints/${EXTRA_TAG}/"
 
@@ -101,7 +101,7 @@ echo "============================================================"
 # srun 
 # ============================================================
 
-python main_80_20.py \
+python main_80_20_ouest_est.py \
        --launcher none \
        --cfg_file ${CONFIG_NAME} \
        --save_hit_file hit_scores.txt \
