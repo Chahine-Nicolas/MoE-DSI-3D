@@ -10,6 +10,36 @@
 - [2026-02] Code release
 - [2026-07] Model weights
 
+# Dataset
+
+The dataset used to apply a Mixture of expert is [LiDAR HD](https://geoservices.ign.fr/lidarhd). It is a country-wide, tile-based acquisition campaign that spans a wide variety of France environments. This large-scale coverage is complemented by the flexibility to define scene boundaries and control spatial overlap between adjacent scenes, enabling tailored dataset configurations.
+
+the dataset is distributed in 1~km$^2$ tiles
+
+We selected the Paris area as our primary study region and divided it into two areas:
+- (Left) The eastern part of Paris, named $Paris_{East}$, extends from Saint-Mandé to Vincennes (9 tiles). 
+- (Right) The western part of Paris, named $Paris_{West}$, extends across parts of the Bois de Boulogne up to the Champ-de-Mars (16 tiles).  
+
+<p align="center">
+  <img src="https://github.com/Chahine-Nicolas/MoE-DSI-3D/blob/main/__assets__/img/paris_est.jpg" width="200">
+  <img src="https://github.com/Chahine-Nicolas/MoE-DSI-3D/blob/main/__assets__/img/paris_ouest.jpg" width="200">
+</p>
+
+To obtain finer spatial granularity, we subdivided each tile into a regular grid: $150 per 150$ cells for the eastern Paris area and $200 per 200$ m cells for the western Paris area. This resulted in core point clouds of $20 per 20 $ m in size. To construct input scenes for point cloud retrieval, each core cell located at position $(x, y)$  was expanded by aggregating its neighboring cells observed within the range $[x \pm 2, y \pm 2]$, yielding a point cloud of $100 per 100 $ m composed of 25 sub-cells.
+ 
+<p align="center">
+  <img src="https://github.com/Chahine-Nicolas/MoE-DSI-3D/blob/main/__assets__/img/cell.PNG" width="200">
+  <img src="https://github.com/Chahine-Nicolas/MoE-DSI-3D/blob/main/__assets__/img/pcd.PNG" width="200">
+  <img src="https://github.com/Chahine-Nicolas/MoE-DSI-3D/blob/main/__assets__/img/pcd2.PNG" width="200">
+</p>
+
+<p align="center">
+  <img src="https://github.com/Chahine-Nicolas/MoE-DSI-3D/blob/main/__assets__/img/moe_est.png" width="300">
+  <img src="https://github.com/Chahine-Nicolas/MoE-DSI-3D/blob/main/__assets__/img/moe_ouest.png" width="300">
+</p>
+
+
+
 # MoE-DSI-3D Checkpoint
 
 [Download here](https://huggingface.co/Chahine-Nicolas/MoE-DSI-3D/tree/main)
