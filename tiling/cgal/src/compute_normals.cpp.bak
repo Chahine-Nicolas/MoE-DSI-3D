@@ -1,0 +1,74 @@
+#include <CGAL/Simple_cartesian.h>
+#include <CGAL/IO/read_las_points.h>
+#include <CGAL/IO/write_ply_points.h>
+#include <CGAL/jet_estimate_normals.h>
+#include <CGAL/scanline_orient_normals.h>
+using Kernel = CGAL::Simple_cartesian<double>;
+using Point_3 = Kernel::Point_3;
+using Vector_3 = Kernel::Vector_3;
+using Point_with_info = std::tuple<Point_3, Vector_3, float, unsigned char>;
+using Point_map = CGAL::Nth_of_tuple_property_map<0, Point_with_info>;
+using Normal_map = CGAL::Nth_of_tuple_property_map<1, Point_with_info>;
+using Scan_angle_map = CGAL::Nth_of_tuple_property_map<2, Point_with_info>;
+using Scanline_id_map = CGAL::Nth_of_tuple_property_map<3, Point_with_info>;
+void dump (const char* filename, const std::vector<Point_with_info>& points)
+{
+  std::ofstream ofile (filename, std::ios::binary);
+  CGAL::IO::set_binary_mode(ofile);
+  CGAL::IO::write_PLY
+    (ofile, points,
+     CGAL::parameters::point_map (Point_map()).
+     normal_map (Normal_map()));
+}
+
+
+int main (int argc, char** argv)
+{
+    std::string fname;
+    if (argc > 1 && argv[1] != nullptr) {
+        fname = argv[1];
+    } else {
+        fname = "data/urban.las";
+    }
+
+    std::string outname;
+    if (argc > 2 && argv[2] != nullptr) {
+        outname = argv[2];
+    } else {
+        outname = "out_angle_and_flag.ply";  // fallback si aucun nom fourni
+    }
+
+    std::vector<Point_with_info> points;
+
+    std::ifstream ifile(fname, std::ios::binary);
+    if (!ifile ||
+        !CGAL::IO::read_LAS_with_properties<Point_with_info>
+        (ifile, std::back_inserter(points),
+         CGAL::IO::make_las_point_reader(Point_map()),
+         std::make_pair(Scan_angle_map(), CGAL::IO::LAS_property::Scan_angle()),
+         std::make_pair(Scanline_id_map(), CGAL::IO::LAS_property::Scan_direction_flag())))
+    {
+        std::cerr << "Can't read " << fname << std::endl;
+        return EXIT_FAILURE;
+    }
+
+
+    CGAL::jet_estimate_normals<CGAL::Parallel_if_available_tag>
+        (points, 12,
+         CGAL::parameters::point_map(Point_map()).
+         normal_map(Normal_map()));
+
+
+    CGAL::scanline_orient_normals
+        (points,
+         CGAL::parameters::point_map(Point_map()).
+         normal_map(Normal_map()).
+         scan_angle_map(Scan_angle_map()).
+         scanline_id_map(Scanline_id_map()));
+
+
+    dump(outname.c_str(), points);
+
+    return EXIT_SUCCESS;
+}
+

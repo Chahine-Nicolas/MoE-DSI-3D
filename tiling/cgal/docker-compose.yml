@@ -1,0 +1,7 @@
+services:
+  cgal :
+    build: 
+      context: .
+      dockerfile: Dockerfile-cgal
+    volumes:
+     - ${PROJECT_PATH}:${PROJECT_PATH}

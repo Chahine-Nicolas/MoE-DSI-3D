@@ -1,0 +1,25 @@
+FROM ubuntu:22.04
+
+ENV http_proxy <HTTP_PROXY>
+ENV https_proxy <HTTPS_PROXY>
+
+WORKDIR /usr/src/app
+
+RUN apt-get update &&  apt-get install -y cmake build-essential libeigen3-dev libcgal-dev g++ --assume-yes
+
+## Mesh reconstruction
+RUN apt-get update && apt-get install -y libpng-dev libjpeg-dev --assume-yes
+
+## Install CGAL & normal extraction
+COPY ./ /usr/src/app/cgal/
+
+RUN mkdir -p /usr/src/app/cgal/extern/LAStools/build/  \
+    && cd /usr/src/app/cgal/extern/LAStools/build/ \
+    && cmake ../ -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+    && make 
+
+RUN mkdir -p /usr/src/app/cgal/build/ \
+    && cd /usr/src/app/cgal/build/ \
+    && cmake ../ -DCMAKE_BUILD_TYPE=Release \
+    && make
+
