@@ -1,0 +1,1 @@
+https://data.geopf.fr/telechargement/download/LiDARHD-NUALID/NUALHD_1-0__LAZ_LAMB93_KE_2025-06-06/LHD_FXX_0656_6862_PTS_LAMB93_IGN69.copc.laz
