@@ -9,7 +9,8 @@
 
 - [2026-02] Code release
 - [2026-07] Model weights
-
+- [2026-09] Dataset
+  
 # Dataset
 
 The dataset used to apply a Mixture of expert is [LiDAR HD](https://geoservices.ign.fr/lidarhd). It is a country-wide, tile-based acquisition campaign that spans a wide variety of France environments. This large-scale coverage is complemented by the flexibility to define scene boundaries and control spatial overlap between adjacent scenes, enabling tailored dataset configurations.
