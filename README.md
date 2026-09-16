@@ -38,7 +38,7 @@ To obtain finer spatial granularity, we subdivided each tile into a regular grid
   <img src="https://github.com/Chahine-Nicolas/MoE-DSI-3D/blob/main/__assets__/img/moe_ouest.png" width="300">
 </p>
 
-
+[Download here](https://huggingface.co/datasets/Chahine-Nicolas/LiDAR_HD/tree/main)
 
 # MoE-DSI-3D Checkpoint
 
