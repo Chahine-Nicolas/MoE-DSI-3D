@@ -6,13 +6,13 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 
-list_seq = ["A0", "B0", "C0", "D0"]
+list_seq = ["A0", "B0", "C0", "D0"] 
 root_path = "../lidarhd_EAST"
 saved_descriptor_folder = "desc_2025-06-23_11-22-13"
 
 
 class multiSequenceDataset(Dataset):
-    def __init__(self, list_seq, data, root_path, target_label, saved_descriptor_folder):
+    def __init__(self, list_seq, data, root_path, saved_descriptor_folder):
         self.samples = []
         self.labels = []
         self.seq_to_idx = {seq: i for i, seq in enumerate(list_seq)}
@@ -20,29 +20,26 @@ class multiSequenceDataset(Dataset):
         for seq in list_seq:
             seq_str = seq
             sequence_path = os.path.join(root_path, saved_descriptor_folder)
-
+        
             for file_path_i in data[seq_str]:
-                file = os.path.basename(file_path_i)[:-4] + '.pt'
+
+                file = os.path.basename(file_path_i)[:-4] +'.pt'
                 file_path = os.path.join(sequence_path, file)
-
-
+                
                 if os.path.exists(file_path):
-                    vec = torch.load(file_path).to(torch.float32)
-
+                    vec = torch.load(file_path).to(torch.float32) 
                     
-                    #  lookup the correct multi-hot label from your dict
-                    if file in target_label:
-                        label = target_label[file]
-
                     self.samples.append(vec)
-                    self.labels.append(label)
+                    self.labels.append(self.seq_to_idx[seq])
+        
+                    print(file_path_i, self.seq_to_idx[seq])
+                               
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
         return self.samples[idx], self.labels[idx]
-
 
 
 def load_set_ids(train_indices_path):
@@ -53,7 +50,6 @@ def load_set_ids(train_indices_path):
     return train_indices
 
 
-    
 class SequenceDataset(Dataset):
     def __init__(self, root_path, length_seq):
         self.samples = []
@@ -96,8 +92,6 @@ class SequenceDataset(Dataset):
     def __getitem__(self, idx):
         return self.samples[idx], self.labels[idx]
 
-
-#GATE 2
 class ExpertClassifier(nn.Module):
     def __init__(self, input_dim=256, num_experts=len(list_seq)):
         super(ExpertClassifier, self).__init__()
@@ -119,150 +113,77 @@ class ExpertClassifier(nn.Module):
     
     def forward(self, x):
         return self.model(x)
-
-def predict_expert(model, feature_vector, device, threshold=0.5):
-    with torch.no_grad():
-        feature_vector = feature_vector.to(device).unsqueeze(0)  # [1, 256]
-        logits = model(feature_vector)                           # [1, num_experts]
-        probs = torch.sigmoid(logits)                            # convert to [0,1] range
-
-        # Choose all experts above threshold
-        top1_idx = torch.argmax(probs, dim=1)                    # [1]
-        predicted_mask = torch.zeros_like(probs)
-        predicted_mask[0, top1_idx] = 1.0     
-
         
-        #predicted_mask = (probs > threshold).float()
+def predict_expert(model, feature_vector, device):
+    with torch.no_grad():
+        feature_vector = feature_vector.to(device).unsqueeze(0)  # Add batch dimension
+        output = model(feature_vector)
+        predicted_expert_idx = torch.argmax(output).item()
+        print("output", output)
+        # probac
+        m = nn.Softmax(dim=1)
+        prob_seq = m(output)
 
-    return predicted_mask[0], logits[0], probs[0]
- 
+    return list_seq[predicted_expert_idx], output[0][predicted_expert_idx], prob_seq[0][predicted_expert_idx] 
+
 
 
 def main():
+
+    with open("../LoGG3D-Net/config/kitti_tuples/is_revisit_D-3_T-30.json") as f:
+        data = json.load(f)
+
     device = 'cuda'
     print("Load dataset")
 
-    train_indicesa = load_set_ids("zone_A_dsi_train_list.json")
-    train_indicesb = load_set_ids("zone_B_dsi_train_list.json")
-    train_indicesc = load_set_ids("zone_C_dsi_train_list.json")
-    train_indicesd = load_set_ids("zone_D_dsi_train_list.json")
+
+
+    train_indicesa = load_set_ids("zone_A_dsi_train_list.json")[:64]
+    train_indicesb = load_set_ids("zone_B_dsi_train_list.json")[:64]
+    train_indicesc = load_set_ids("zone_C_dsi_train_list.json")[:64]
+    train_indicesd = load_set_ids("zone_D_dsi_train_list.json")[:64] 
 
     data = {"A0": train_indicesa, "B0": train_indicesb, "C0": train_indicesc, "D0": train_indicesd}
+    dataset =  multiSequenceDataset(list_seq, data, root_path, saved_descriptor_folder)
+    dataloader = DataLoader(dataset, batch_size=256, shuffle=True)
 
     
-    val_indicesa = load_set_ids("zone_A_dsi_val_list.json")
-    val_indicesb = load_set_ids("zone_B_dsi_val_list.json")
-    val_indicesc = load_set_ids("zone_C_dsi_val_list.json")
-    val_indicesd = load_set_ids("zone_D_dsi_val_list.json")
+    val_indicesa = load_set_ids("zone_A_dsi_val_list.json")[:64] 
+    val_indicesb = load_set_ids("zone_B_dsi_val_list.json")[:64] 
+    val_indicesc = load_set_ids("zone_C_dsi_val_list.json")[:64] 
+    val_indicesd = load_set_ids("zone_D_dsi_val_list.json")[:64] 
 
     data_val = {"A0": val_indicesa, "B0": val_indicesb, "C0": val_indicesc, "D0": val_indicesd}
+    dataset_val =  multiSequenceDataset(list_seq, data, root_path, saved_descriptor_folder)
+    dataloader_val = DataLoader(dataset, batch_size=256, shuffle=True)
 
     
 
-    eval_indicesa = load_set_ids("zone_A_dsi_eval_list.json")
-    eval_indicesb = load_set_ids("zone_B_dsi_eval_list.json")
-    eval_indicesc = load_set_ids("zone_C_dsi_eval_list.json")
-    eval_indicesd = load_set_ids("zone_D_dsi_eval_list.json")
+    eval_indicesa = load_set_ids("zone_A_dsi_eval_list.json")[:64] 
+    eval_indicesb = load_set_ids("zone_B_dsi_eval_list.json")[:64] 
+    eval_indicesc = load_set_ids("zone_C_dsi_eval_list.json")[:64] 
+    eval_indicesd = load_set_ids("zone_D_dsi_eval_list.json")[:64] 
 
     data_eval = {"A0": eval_indicesa, "B0": eval_indicesb, "C0": eval_indicesc, "D0": eval_indicesd}
-
-
-    print("train len ", len(train_indicesa + train_indicesb + train_indicesc + train_indicesd) )
-    print("val len ", len(val_indicesa + val_indicesb + val_indicesc + val_indicesd) )
-    print("eval len ", len(eval_indicesa + eval_indicesb + eval_indicesc + eval_indicesd) )
-    ########################################################
-    # ground truth frame_id distribution
-    ########################################################
-    path_to_ids = {}
-
-    all_names = [
-        train_indicesa,
-        train_indicesb,
-        train_indicesc,
-        train_indicesd,
-    ]
-
-    
-    for idx, name_list in enumerate(all_names):
-        for path in name_list:
-            base = os.path.basename(path)[:-4] + '.pt'  # extract filename
-            if base not in path_to_ids:
-                path_to_ids[base] = []
-            path_to_ids[base].append(idx)
-
-    print(len(path_to_ids))
-
-    
-    all_names = [
-        val_indicesa,
-        val_indicesb,
-        val_indicesc,
-        val_indicesd,
-    ]
-
-    
-    for idx, name_list in enumerate(all_names):
-        for path in name_list:
-            base = os.path.basename(path)[:-4] + '.pt'   # extract filename
-            if base not in path_to_ids:
-                path_to_ids[base] = []
-            path_to_ids[base].append(idx)
-
-    print(len(path_to_ids))
-
-
-    
-    all_names = [
-        eval_indicesa,
-        eval_indicesb,
-        eval_indicesc,
-        eval_indicesd,
-    ]
-
-    
-    for idx, name_list in enumerate(all_names):
-        for path in name_list:
-            base = os.path.basename(path)[:-4] + '.pt'   # extract filename
-            if base not in path_to_ids:
-                path_to_ids[base] = []
-            path_to_ids[base].append(idx)
-
-    print(len(path_to_ids))
-    
-    expert_labels = path_to_ids
-
-    
-    ########################################################
-    
-    num_experts = len(list_seq)
-
-    target_label = {}
-
-    for key, val in path_to_ids.items():
-        multi_hot = torch.zeros(num_experts, dtype=torch.float32)
-        for valid_expert in val:
-            multi_hot[valid_expert] = 1.0
-        target_label[key] = multi_hot
-
-    print( target_label['LHD_FXX_0656_6861_PTS_O_LAMB93_IGN69.copc_10_10_45.pt'] )
-
-    print("loading train set")
-    dataset =  multiSequenceDataset(list_seq, data, root_path, target_label, saved_descriptor_folder)
-    dataloader = DataLoader(dataset, batch_size=256, shuffle=True)
-    print("loaded train set")
-
-    print("loading val set")
-    dataset_val =  multiSequenceDataset(list_seq, data, root_path, target_label, saved_descriptor_folder)
-    dataloader_val = DataLoader(dataset, batch_size=256, shuffle=True)
-    print("loaded val set")
-    
-    print("loading eval set")
-    dataset_eval =  multiSequenceDataset(list_seq, data, root_path, target_label, saved_descriptor_folder)
+    dataset_eval =  multiSequenceDataset(list_seq, data, root_path, saved_descriptor_folder)
     dataloader_eval = DataLoader(dataset, batch_size=256, shuffle=True)
-    print("loaded eval set")
+   
+    data = {"A0": eval_indicesa, "B0": eval_indicesb, "C0": eval_indicesc, "D0": eval_indicesd}
+    dataset =  multiSequenceDataset(list_seq, data, root_path, saved_descriptor_folder)
+    dataloader = DataLoader(dataset, batch_size=256, shuffle=True)
+
     
+    eval_indicesa = load_set_ids("small_list_A.json")[:64] 
+    eval_indicesb = load_set_ids("small_list_B.json")[:64] 
+    eval_indicesc = load_set_ids("small_list_C.json")[:64] 
+    eval_indicesd = load_set_ids("small_list_D.json")[:64] 
 
+    data_eval = {"A0": train_indicesa, "B0": train_indicesb, "C0": train_indicesc, "D0": train_indicesd}
+    dataset_eval =  multiSequenceDataset(list_seq, data, root_path, saved_descriptor_folder)
+    dataloader_eval = DataLoader(dataset, batch_size=256, shuffle=True)
 
+    import pdb; pdb.set_trace()
+    
     print("Initialize model")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = ExpertClassifier().to(device)
@@ -270,21 +191,19 @@ def main():
     print("model", model)
     
     print("Define loss and optimizer")
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.CrossEntropyLoss()
+    #optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     optimizer = optim.Adam(model.parameters(), lr=0.002)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
 
 
-    model_name = "expert_router_4linear_multi.pth"
-    model_name = "gate_EST.pth"
+    model_name = "expert_router_4linear_all.pth"
     
     training=True
-    training=False
     if training:
         print("Training loop")
         num_epochs = 80
-
         for epoch in range(num_epochs):
             total_loss = 0
             correct = 0
@@ -292,11 +211,11 @@ def main():
         
             for features, labels in dataloader:
                 features, labels = features.to(device), labels.to(device)
-                
+        
                 # Forward pass
                 outputs = model(features)
                 loss = criterion(outputs, labels)
-                #import pdb; pdb.set_trace()
+        
                 # Backpropagation
                 optimizer.zero_grad()
                 loss.backward()
@@ -304,15 +223,8 @@ def main():
         
                 # Track performance
                 total_loss += loss.item()
-
-                """
                 _, predicted = torch.max(outputs, 1)
                 correct += (predicted == labels).sum().item()
-                """
-
-                predicted = (torch.sigmoid(outputs) > 0.5).float()
-                correct += ((predicted == labels).all(dim=1)).sum().item()
-                
                 total += labels.size(0)
 
             print(f"Epoch {epoch+1}, Loss: {total_loss:.4f}, Accuracy: {100 * correct / total:.2f}%")
@@ -327,14 +239,11 @@ def main():
                 # Forward pass
                 outputs = model(features)
                 loss_valid = criterion(outputs, labels)
-
-
-                
+        
                 # Track performance
                 total_loss += loss_valid.item()
-
-                predicted = (torch.sigmoid(outputs) > 0.5).float()
-                correct += ((predicted == labels).all(dim=1)).sum().item()
+                _, predicted = torch.max(outputs, 1)
+                correct += (predicted == labels).sum().item()
                 total += labels.size(0)
                 
             print(f"Validation, Loss: {total_loss:.4f}, Accuracy: {100 * correct / total:.2f}%")
@@ -345,11 +254,12 @@ def main():
         from collections import Counter
         print("Counter(dataset.labels) ", Counter(dataset.labels))
     
-
+    import pdb; pdb.set_trace()
     model = ExpertClassifier(input_dim=256, num_experts=4).to(device)
     model.load_state_dict(torch.load(model_name, map_location=device))
     model.eval()
 
+    
     
     # evaluation
     print("start evaluation")
@@ -357,7 +267,7 @@ def main():
     hit, num = 0, 0
     seen_proba = []
     for seq in list_seq:
-            sequence_path = os.path.join(root_path, saved_descriptor_folder)
+            sequence_path = os.path.join(root_path, "256_desc_2025-06-23_11-22-13_run_0_4")
             seq_str = seq
         
             for file_path_i in data_eval[seq_str]:
@@ -367,30 +277,20 @@ def main():
                 num +=1 
                 
                 test_feature = torch.load(file_path).to(torch.float32)  # Force float32 
-                #best_expert, score, prob = predict_expert(model, test_feature, device)
+    
+                best_expert, score, prob = predict_expert(model, test_feature, device)
 
-
-                pred_mask, logits, probs = predict_expert(model, test_feature, device, threshold=0.5)
-                true_label = target_label[file].to(device)
-        
-                # Evaluate correctness
-
-                pred_indices = (pred_mask > 0).nonzero(as_tuple=True)[0].tolist()
-                true_indices = (true_label > 0).nonzero(as_tuple=True)[0].tolist()
-                correct =  bool(set(pred_indices) & set(true_indices))
-        
-                if correct:
+                
+                print(file_path)
+                print(f"Predicted expert: {best_expert}, Expected expert: {seq_str }, Score: {score}, proba: {prob} ")
+                seen_proba.append(prob.cpu().numpy())
+                
+                if best_expert ==  seq_str:
                     hit += 1
-        
-                seen_proba.append(probs.cpu().numpy())
-        
-                print(f"{file_path}")
-                print(f"Pred mask: {pred_mask.cpu().numpy()}, True: {true_label.cpu().numpy()}, "
-                      f"Probs: {probs.cpu().numpy()}")
-        
-                print(f"Exact-match accuracy: {hit / num:.2%}")
-                print(f"Average probability: {np.mean(seen_proba):.4f}")
-        
+                    
+    print("correct prediction (%): ", hit / num)
+    print("average proba: ", np.mean(seen_proba) )
+            
 
 if __name__ == '__main__':
     main()
