@@ -41,7 +41,7 @@ INPUT_DIM = args.input_dim
 # ============================================================
 # Dataset
 # ============================================================
-# ok
+
 class MultiSequenceDataset(Dataset):
     """
     Dataset pour les séquences dont un fichier peut appartenir
@@ -96,7 +96,7 @@ class MultiSequenceDataset(Dataset):
 # ============================================================
 # Model
 # ============================================================
-# ok
+
 class ExpertClassifier(nn.Module):
     def __init__(self, input_dim, num_experts):
         super().__init__()
@@ -217,7 +217,7 @@ def build_target_labels(path_to_ids, num_experts):
 # ============================================================
 # Chargement complet des données
 # ============================================================
-# ok
+
 def prepare_data(config):
     list_seq = config["list_seq"]
     root_path = config["root_path"]
@@ -276,7 +276,7 @@ def prepare_data(config):
 # ============================================================
 # Prediction
 # ============================================================
-# ok
+
 def predict_expert(model, feature_vector, device):
     with torch.no_grad():
 
