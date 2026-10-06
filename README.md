@@ -124,7 +124,7 @@ python Gate_trainer.py --list_seq A0 B0 C0 D0 --root_path "../data/lidarhd_v2/" 
 
 Train Gate West:
 ```highlight
-python Gate_trainer.py --list_seq A1 B1 C1 D1 E1 --root_path "../data/lidarhd_v3/" --model_name "..\data\Gate\gate_WEST.pth" --batch_size 256 --num_epochs 80 --learning_rate 0.002 --input_dim 256
+python Gate_trainer.py --training --list_seq A1 B1 C1 D1 E1 --root_path "../data/lidarhd_v3/" --model_name "..\data\Gate\gate_WEST.pth" --batch_size 256 --num_epochs 80 --learning_rate 0.002 --input_dim 256
 ```
 
 Evaluate Gate West:
