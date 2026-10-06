@@ -114,12 +114,12 @@ The Gate is trained as a multi-label classifier: for each input descriptor, it p
 
 Train Gate East:
 ```highlight
-python Gate_trainer.py --training --list_seq A0 B0 C0 D0 --root_path "../data/lidarhd_v2/" --model_name "..\data\Gate\gate_EAST_supp.pth" --batch_size 256 --num_epochs 80 --learning_rate 0.002 --input_dim 256
+python Gate_trainer.py --training --list_seq A0 B0 C0 D0 --root_path "../data/lidarhd_v2/" --model_name "..\data\Gate\gate_EAST.pth" --batch_size 256 --num_epochs 80 --learning_rate 0.002 --input_dim 256
 ```
 
 Evaluate Gate East:
 ```highlight
-python Gate_trainer.py --list_seq A0 B0 C0 D0 --root_path "../data/lidarhd_v2/" --model_name "..\data\Gate\gate_EAST_supp.pth" --batch_size 256 --num_epochs 80 --learning_rate 0.002 --input_dim 256
+python Gate_trainer.py --list_seq A0 B0 C0 D0 --root_path "../data/lidarhd_v2/" --model_name "..\data\Gate\gate_EAST.pth" --batch_size 256 --num_epochs 80 --learning_rate 0.002 --input_dim 256
 ```
 
 Train Gate West:
