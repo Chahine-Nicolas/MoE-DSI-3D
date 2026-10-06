@@ -110,20 +110,26 @@ eval_indices_path = "id_zone_A_dsi_eval_list.json"
 
 # Gate training
 
+The Gate is trained as a multi-label classifier: for each input descriptor, it predicts which experts are relevant. 
 
-Train and evaluate Gate East:
+Train Gate East:
 ```highlight
-python train_relu_lhd_multilabel.py
+python Gate_trainer.py --training --list_seq A0 B0 C0 D0 --root_path "../data/lidarhd_v2/" --model_name "..\data\Gate\gate_EAST_supp.pth" --batch_size 256 --num_epochs 80 --learning_rate 0.002 --input_dim 256
 ```
 
-Train and evaluate Gate West:
+Evaluate Gate East:
 ```highlight
-python train_relu_lhd_multilabel_OUEST.py
+python Gate_trainer.py --list_seq A0 B0 C0 D0 --root_path "../data/lidarhd_v2/" --model_name "..\data\Gate\gate_EAST_supp.pth" --batch_size 256 --num_epochs 80 --learning_rate 0.002 --input_dim 256
 ```
 
-Train and evaluate Gate East + West:
+Train Gate West:
 ```highlight
-python train_relu_lhd_multilabel_EST_OUEST.py
+python Gate_trainer.py --list_seq A1 B1 C1 D1 E1 --root_path "../data/lidarhd_v3/" --model_name "..\data\Gate\gate_WEST.pth" --batch_size 256 --num_epochs 80 --learning_rate 0.002 --input_dim 256
+```
+
+Evaluate Gate West:
+```highlight
+python Gate_trainer.py --list_seq A1 B1 C1 D1 E1 --root_path "../data/lidarhd_v3/" --model_name "..\data\Gate\gate_WEST.pth" --batch_size 256 --num_epochs 80 --learning_rate 0.002 --input_dim 256
 ```
 
 # MoE-DSI-3D evaluation
