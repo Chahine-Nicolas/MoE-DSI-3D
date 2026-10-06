@@ -6,36 +6,37 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import hamming_loss, accuracy_score
-
+import argparse
 
 # ============================================================
 # Configuration
 # ============================================================
 
-CONFIGS = {
-    "EAST": {
-        "list_seq": ["A0", "B0", "C0", "D0"],
-        "root_path": r"C:/Users/chahi/Desktop/these/code/temp/data/lidarhd_v2/",
-        "saved_descriptor_folder": "descriptor",
-        "model_name": r"C:\Users\chahi\Desktop\these\code\temp\data\Gate\gate_EAST_new.pth",
-    },
-    "WEST": {
-        "list_seq": ["A1", "B1", "C1", "D1", "E1"],
-        "root_path": r"C:/Users/chahi/Desktop/these/code/temp/data/lidarhd_v3/",
-        "saved_descriptor_folder": "descriptor",
-        "model_name": r"C:\Users\chahi\Desktop\these\code\temp\data\Gate\gate_WEST.pth",
-    },
-}
+parser = argparse.ArgumentParser()
 
-REGION = "EAST"
+parser.add_argument("--training", action="store_true", help="Train the model")
+parser.add_argument("--list_seq", nargs="+", default=["A0", "B0", "C0", "D0"], help="Expert list")
+parser.add_argument("--root_path", default="../data/lidarhd_v2/", help="Dataset rooth path")
+parser.add_argument("--saved_descriptor_folder", default="descriptor", help="Saved descriptor folder")
+parser.add_argument("--model_name", default="data\Gate\gate_EAST.pth", help="Gate model name")
 
-TRAINING = True
+parser.add_argument("--batch_size", type=int, default=256, help="Batch size")
+parser.add_argument("--num_epochs", type=int, default=80, help="Saved descriptor folder")
+parser.add_argument("--learning_rate", type=float, default=0.002, help="Learning rate")
+parser.add_argument("--input_dim", type=int, default=256, help="Input descriptor dimension")
 
-BATCH_SIZE = 256
-NUM_EPOCHS = 80
-LEARNING_RATE = 0.002
-INPUT_DIM = 256
+args = parser.parse_args()
 
+TRAINING = args.training
+LIST_SEQ = args.list_seq
+ROOT_PATH = args.root_path
+SAVED_DESCRIPTOR_FOLDER = args.saved_descriptor_folder
+MODEL_NAME = args.model_name
+
+BATCH_SIZE = args.batch_size
+NUM_EPOCHS = args.num_epochs
+LEARNING_RATE = args.learning_rate
+INPUT_DIM = args.input_dim
 
 # ============================================================
 # Dataset
@@ -390,12 +391,8 @@ def train_model(model, dataloader, dataloader_val, device):
 # Evaluation
 # ============================================================
 
-def evaluate_model(model, data_eval, target_label, config, device,):
+def evaluate_model(model, data_eval,target_label, list_seq, root_path, saved_descriptor_folder, device,):
     model.eval()
-
-    list_seq = config["list_seq"]
-    root_path = config["root_path"]
-    saved_descriptor_folder = config["saved_descriptor_folder"]
 
     sequence_path = os.path.join(root_path, saved_descriptor_folder)
 
@@ -471,15 +468,14 @@ def evaluate_model(model, data_eval, target_label, config, device,):
 
 def main():
 
-    config = CONFIGS[REGION]
-
-    list_seq = config["list_seq"]
+    list_seq = LIST_SEQ
     num_experts = len(list_seq)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device(
+        "cuda" if torch.cuda.is_available() else "cpu"
+    )
 
     print("==============================")
-    print(f"Region: {REGION}")
     print(f"Experts: {list_seq}")
     print(f"Device: {device}")
     print("==============================")
@@ -488,24 +484,24 @@ def main():
     # Data
     # -------------------------
     
-    train_data, val_data, eval_data, target_label = prepare_data(config)
+    train_data, val_data, eval_data, target_label = prepare_data({"list_seq": LIST_SEQ, "root_path": ROOT_PATH,})
 
     # Train dataset
     dataset = MultiSequenceDataset(
         list_seq,
         train_data,
-        config["root_path"],
+        ROOT_PATH,
         target_label,
-        config["saved_descriptor_folder"],
+        SAVED_DESCRIPTOR_FOLDER,
     )
     
     # Validation dataset
     dataset_val = MultiSequenceDataset(
         list_seq,
         val_data,
-        config["root_path"],
+        ROOT_PATH,
         target_label,
-        config["saved_descriptor_folder"],
+        SAVED_DESCRIPTOR_FOLDER,
     )
 
     # Torch dataloader
@@ -533,9 +529,9 @@ def main():
 
         train_model(model, dataloader, dataloader_val, device)
 
-        torch.save(model.state_dict(), config["model_name"])
+        torch.save(model.state_dict(), MODEL_NAME)
 
-        print("Model saved:", config["model_name"])
+        print("Model saved:", MODEL_NAME)
 
     # -------------------------
     # Load model
@@ -543,7 +539,7 @@ def main():
 
     print("\nLoading model...")
 
-    model.load_state_dict(torch.load(config["model_name"], map_location=device))
+    model.load_state_dict(torch.load(MODEL_NAME, map_location=device))
 
     # -------------------------
     # Evaluation
@@ -551,7 +547,7 @@ def main():
 
     print("\nStarting evaluation...")
 
-    evaluate_model(model, eval_data, target_label, config, device)
+    evaluate_model(model, eval_data, target_label, LIST_SEQ, ROOT_PATH, SAVED_DESCRIPTOR_FOLDER, device)
 
 
 if __name__ == "__main__":
