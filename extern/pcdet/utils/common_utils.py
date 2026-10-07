@@ -5,12 +5,11 @@ import random
 import shutil
 import subprocess
 import SharedArray
-from torch.nn import functional as F
 import numpy as np
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
-import hostlist
+# import hostlist # uncomment for HPC
 
 def bilinear_interpolate_torch(im, x, y):
     """

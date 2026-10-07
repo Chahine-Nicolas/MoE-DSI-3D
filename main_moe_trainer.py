@@ -1,73 +1,44 @@
+import os
 import _init_path
 import argparse
 import datetime
-import glob
-
-# Avoid tokenizers parallelism fork warning
-import os
-os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-
-
-
-from pathlib import Path
-from extern.log3dnet.SOP import SOP
-from collections import Counter
-from dataclasses import replace 
-import time
-# 
-import torch.distributed as dist
-#from torch.nn.parallel import DistributedDataParallel as DDP
-
-import hostlist
+import copy 
+import traceback
+import math
+import gc
+import json
 
 import torch
 import torch.nn as nn
-from tensorboardX import SummaryWriter 
-import copy 
-import traceback
-import logging
+import torch.nn.functional as F
+import numpy as np
+import matplotlib.pyplot as plt
 
-from extern.pcdet.config import cfg, cfg_from_list, cfg_from_yaml_file, log_config_to_file
+from pathlib import Path
+from extern.log3dnet.SOP import SOP
+from dataclasses import replace 
+
+from extern.pcdet.config import cfg, cfg_from_yaml_file, log_config_to_file
 from extern.pcdet.datasets import build_dataloader
 from extern.pcdet.utils import common_utils
-#from extern.train_utils.optimization import build_optimizer, build_scheduler
-#from extern.train_utils.train_utils import train_model
-import numpy as np
 
-## Blip2
-import requests
-from PIL import Image
-from transformers import AutoProcessor,AutoModel, AutoConfig, AutoTokenizer, TrainingArguments , HfArgumentParser
-#from extern.blip2.modeling_blip_2 import Blip2ModelQuerryLearning
-#from extern.blip2.processing_blip_2 import Blip2Processor
-from transformers import BertTokenizer, BertModel,BertLMHeadModel,MT5Tokenizer
-#from extern.blip2.modeling_bert_generation   import BertGenerationDecoder
-from transformers import  GPTQConfig
+from transformers import AutoProcessor, AutoConfig, AutoTokenizer, TrainingArguments , HfArgumentParser, TrainerCallback
 
 ## DSI QG
 from dataclasses import dataclass
 from transformers.trainer import Trainer
-from transformers import PreTrainedTokenizer, DataCollatorWithPadding,PretrainedConfig
+from transformers import DataCollatorWithPadding
 from typing import Dict, List, Tuple, Optional, Any, Union
-from transformers import   MT5ForConditionalGeneration
-from extern.git.modeling_git import GitModel,GitForCausalLM
-
+from extern.git.modeling_git import GitForCausalLM
 from evaluate_moe import eval_log3dnet
-#from evaluate_overfit import eval_overfit
-#from compute_hierarchical_index import compute_hierarchical_clustering
-
-import json
-from tqdm import tqdm
-import matplotlib.pyplot as plt
-from transformers import TrainerCallback
 
 ##################################
 # read pos
-# #################################
+##################################
 from module_loader_kitti_pose import * # add for more metrics
-import math
-import gc
 
+
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 WORK_PATH = os.getenv('WORKSF')
 
 ## ====  Usefull stuff =======
@@ -95,7 +66,7 @@ def get_pts_for_plot(query_idx,eval_seq,tfs,pose) :
     #load points
     xyz = np.fromfile(fname, dtype=np.float32).reshape(-1, 4)
     # every possible positions
-    x, z, y = pose[:,0], pose[:,1], pose[:,2]
+    #x, z, y = pose[:,0], pose[:,1], pose[:,2]
 
     # rotation 1
     out = np.zeros((len(xyz), 3))
@@ -112,38 +83,15 @@ def get_pts_for_plot(query_idx,eval_seq,tfs,pose) :
     return xyzrf
     
 def print_loader(loader,lab) :
-    do_dump_image = False
     lit = iter(loader)
-
-    eval_seq = cfg['DATA_CONFIG']['SEQ']
-    kitti_dir = WORK_PATH+"/datas/datasets/"
     print("")
     print("=========  loader " + lab + " ===========")
     print("ln : " + str(len(loader)))
     acc = 0
     os.makedirs("plot_" + lab, exist_ok=True)
-    sequence_path = kitti_dir + 'sequences/' + eval_seq + '/'
-    #tfs, pose = load_poses_from_txt(sequence_path + 'poses.txt')
     for ii in lit :
         print("id:" + str(ii['id']) + " gt:" + str(ii['gt']) + " labels:" + str(ii['labels']) ) #+ " gps_label:" + str(ii['gps']))
         acc = acc+1
-
-        if do_dump_image : 
-            xyzrf = get_pts_for_plot(int(ii['id']),eval_seq,tfs,pose)
-            if int(ii['gt']) > 0:
-                xyzrf_gt = get_pts_for_plot(int(ii['gt']),eval_seq,tfs,pose)
-            x, z, y = pose[:,0], pose[:,1], pose[:,2]
-            plt.figure()
-            plt.scatter(xyzrf[:, 0], xyzrf[:, 2], c='b', s=0.05,marker='x')
-            if int(ii['gt']) > 0:
-                plt.scatter(xyzrf_gt[:, 0], xyzrf_gt[:, 2], c='r', s=0.05,marker='o')
-            plt.scatter(x,z,c='g', s=0.1)
-            plt.xlabel("X")
-            plt.ylabel("z")
-            plt.title("query "+str(ii['id']) )
-            plt.axis('equal')
-            plt.savefig('plot_' + lab + '/query_'+str(ii['id']) +'.png',dpi=600)
-
         if(acc > 64) :
             print("....")
             break
@@ -182,11 +130,9 @@ def parse_config():
     parser.add_argument('--git_checkpoint', type=str, default=None, help='specify the config for training')
     parser.add_argument('--eval_checkpoint', type=str, default=None, help='specify the config for training')
     parser.add_argument('--resume_from_checkpoint', type=str, default=None, help='specify the config for training')
-
-    
+ 
     parser.add_argument('--per_device_train_batch_size', type=int, default=32, required=False, help='batch size for training DSI')
     parser.add_argument('--per_device_eval_batch_size', type=int, default=4, required=False, help='batch size for training DSI')
-
 
     parser.add_argument('--do_train', type=str, default="False", help='')
     parser.add_argument('--do_eval', type=str, default="False", help='')
@@ -218,8 +164,7 @@ def parse_config():
     #parser.add_argument('--ckpt_save_interval', type=int, default=1, help='number of training epochs')
     parser.add_argument('--max_ckpt_save_num', type=int, default=30, help='max number of saved checkpoint')
     parser.add_argument('--merge_all_iters_to_one_epoch', action='store_true', default=False, help='')
-    parser.add_argument('--set', dest='set_cfgs', default=None, nargs=argparse.REMAINDER,
-                        help='set extra config keys if needed')
+    parser.add_argument('--set', dest='set_cfgs', default=None, nargs=argparse.REMAINDER, help='set extra config keys if needed')
 
     parser.add_argument('--max_waiting_mins', type=int, default=1, help='max waiting minutes')
     parser.add_argument('--start_epoch', type=int, default=0, help='')
@@ -227,7 +172,6 @@ def parse_config():
     parser.add_argument('--save_to_file', action='store_true', default=False, help='')
     parser.add_argument('--remove_unused_columns', type=bool, default=False, help='')
 
-    
     parser.add_argument('--dataloader_pin_memory', type=bool, default=False, help='')
     parser.add_argument('--fuse_conv_bn', action='store_true', default=False, help='')
     parser.add_argument('--output_dir', type=str, default=None, help='output_dir')
@@ -350,7 +294,7 @@ class DSITrainer(Trainer):
         
         model.eval()
         
-        vv = self.tokenizer.batch_decode(inputs["labels"],skip_special_tokens=True)
+        #vv = self.tokenizer.batch_decode(inputs["labels"],skip_special_tokens=True)
         self.ll1 = []
 
         with torch.no_grad():
@@ -576,16 +520,14 @@ def main():
 
     args, cfg = parse_config()
     ID_MAX_LENGTH = args.id_max_length 
-    MAX_LENGTH = ID_MAX_LENGTH
+    #MAX_LENGTH = ID_MAX_LENGTH
 
     model_name = args.model_name
-    dataset_train_len = args.dataset_train_len
-    
-    dataset_eval_len = args.dataset_eval_len
+    #dataset_train_len = args.dataset_train_len
+    #dataset_eval_len = args.dataset_eval_len
 
     checkp_to_eval = args.eval_chkt
     
-    do_overfit = True
     random_seed = int(args.fix_random_seed)
     do_use_sop = eval(args.use_sop)
     if args.launcher == "pytorch" : 
@@ -767,39 +709,39 @@ def main():
             model_dsi.set_input_embeddings(input_embeddings)
             model_dsi.set_output_embeddings(output_embeddings)
             model_dsi.lidar_model.set_lidar_encoder(model, lidar_projection, bt_norm)
-
-    elif model_name == "blip2":
-        model_dsi_path = model_paths["blip2"]
-        if args.local_rank == 0 :
-            logger.info(f"Initializing BLIP2 model from {model_dsi_path}...")
-    
-        # Load BLIP2 configuration and model
-        config = AutoConfig.from_pretrained(model_dsi_path)
-        model_dsi = Blip2ModelQuerryLearning(config=config).to(device=device).type(torch.float32)
-        tokenizer = AutoTokenizer.from_pretrained(model_paths["bert_base"])
-        
-        # Reset BLIP2 parameters if specified
-        if args.reset_model:
+        """
+        elif model_name == "blip2":
+            model_dsi_path = model_paths["blip2"]
             if args.local_rank == 0 :
-                logger.info("Resetting BLIP2 Q-former and weights...")
-            model_dsi.reset_q()
-            try:
-                model_dsi.qformer.apply(weight_reset)
-            except Exception as e:
-                logger.error(f"Failed to reset Q-former weights: {traceback.format_exc()}")
+                logger.info(f"Initializing BLIP2 model from {model_dsi_path}...")
         
-        # Set lidar model with SOP
-        model_sop = SOP(signed_sqrt=False, do_fc=False)
-        model_dsi.lidar_model.sop = model_sop
-        if args.git_checkpoint:
-            if args.local_rank == 0 :
-                logger.info("Restoring BLIP2 input/output embeddings and lidar parameters...")
-            model_dsi.set_input_embeddings(model_dsi.bert.embeddings, input_embeddings)
-            model_dsi.set_output_embeddings(output_embeddings)
-            model_dsi.lidar_model.set_lidar_encoder(model, lidar_projection, bt_norm)
-        else:
-            model_dsi.lidar_model.set_lidar_model(model, model_sop, do_use_sop, eval_set.root_path)
-    
+            # Load BLIP2 configuration and model
+            config = AutoConfig.from_pretrained(model_dsi_path)
+            model_dsi = Blip2ModelQuerryLearning(config=config).to(device=device).type(torch.float32)
+            tokenizer = AutoTokenizer.from_pretrained(model_paths["bert_base"])
+            
+            # Reset BLIP2 parameters if specified
+            if args.reset_model:
+                if args.local_rank == 0 :
+                    logger.info("Resetting BLIP2 Q-former and weights...")
+                model_dsi.reset_q()
+                try:
+                    model_dsi.qformer.apply(weight_reset)
+                except Exception as e:
+                    logger.error(f"Failed to reset Q-former weights: {traceback.format_exc()}")
+            
+            # Set lidar model with SOP
+            model_sop = SOP(signed_sqrt=False, do_fc=False)
+            model_dsi.lidar_model.sop = model_sop
+            if args.git_checkpoint:
+                if args.local_rank == 0 :
+                    logger.info("Restoring BLIP2 input/output embeddings and lidar parameters...")
+                model_dsi.set_input_embeddings(model_dsi.bert.embeddings, input_embeddings)
+                model_dsi.set_output_embeddings(output_embeddings)
+                model_dsi.lidar_model.set_lidar_encoder(model, lidar_projection, bt_norm)
+            else:
+                model_dsi.lidar_model.set_lidar_model(model, model_sop, do_use_sop, eval_set.root_path)
+            """
     else:
         logger.error(f"Unsupported model name: {model_name}. Must be 'git' or 'blip2'.")
 
@@ -811,8 +753,8 @@ def main():
 
     ### ===== Processor / Tokenizer =====
     processor = AutoProcessor.from_pretrained(model_dsi_path)
-    spe_tok = ['[CLS]', '[MASK]', '[PAD]', '[SEP]','[BOS]','[EOS]']
-    ukn = tokenizer.convert_tokens_to_ids('[UNK]') # = 100
+    #spe_tok = ['[CLS]', '[MASK]', '[PAD]', '[SEP]','[BOS]','[EOS]']
+    #ukn = tokenizer.convert_tokens_to_ids('[UNK]') # = 100
     tokenizer.bos_token_id = tokenizer.convert_tokens_to_ids(tokenizer.bos_token) # ' '
     tokenizer.eos_token_id = tokenizer.convert_tokens_to_ids(tokenizer.eos_token) # ' '
     tokenizer.pad_token_id = tokenizer.convert_tokens_to_ids(tokenizer.pad_token) # = 0
@@ -854,7 +796,7 @@ def main():
     ############################################################
     # create ID and token lists
     n_subset = [int(x) for x in range(len(eval_subset))] 
-    n_set = [int(x) for x in range(len(eval_set))] 
+    #n_set = [int(x) for x in range(len(eval_set))] 
     lid = []
     LIK = []
     for ii in n_subset : lid.append(eval_set.get_label(ii))    
@@ -1139,7 +1081,6 @@ def main():
         return values, index
 
     def cumsum_exclusive(t, dim=-1):
-        num_dims = len(t.shape)
         num_pad_dims = - dim - 1
         pre_padding = (0, 0) * num_pad_dims
         pre_slice   = (slice(None),) * num_pad_dims
@@ -1154,8 +1095,8 @@ def main():
         return F.one_hot(indexes, max(max_index + 1, max_length))[..., :max_length]
 
     
-    import torch.nn.functional as F
-    MIN_EXPERT_CAPACITY = 4
+    
+    #MIN_EXPERT_CAPACITY = 4
 
     """
     class ExpertClassifier(nn.Module):
@@ -1240,11 +1181,11 @@ def main():
             if self.training: # true
                 policy = self.second_policy_train # 'random'
                 threshold = self.second_threshold_train #0.2
-                capacity_factor = self.capacity_factor_train # 1.25
+                #capacity_factor = self.capacity_factor_train # 1.25
             else:
                 policy = self.second_policy_eval
                 threshold = self.second_threshold_eval
-                capacity_factor = self.capacity_factor_eval
+                #capacity_factor = self.capacity_factor_eval
     
             #raw_gates = torch.einsum('...bnd,...de->...bne', x, self.w_gating)
             #raw_gates = torch.einsum('...d,...de->...e', x, self.w_gating)
@@ -1446,7 +1387,7 @@ def main():
             # ---- Experts forward ----
 
             batch_size = input_ids.shape[0] if input_ids is not None else lidar_values['pixel_values'].shape[0]
-            seq_len = labels.shape[1] + 1 if labels is not None else 11 
+            #seq_len = labels.shape[1] + 1 if labels is not None else 11 
             vocab_size = 30522
 
             all_outputs = []
@@ -1467,7 +1408,6 @@ def main():
 
 
                 if labels is not None:
-                    vocab_size = 30522
                     print("Expert ", e)
                     shifted_logits = logits[:, 1:-1, :].contiguous() # torch.Size([9, 30522])
                     shifted_labels = labels[:, 1:].contiguous() # torch.Size([9])
@@ -1528,7 +1468,7 @@ def main():
             #supervised_gate_loss = F.cross_entropy(gate_weights, self.expert_labels.to(gate_preds.device))
             
             loss_coef = 1e-2
-            loss_coef2 = 1e-1
+            #loss_coef2 = 1e-1
             print("loss LM", loss)
             print("loss moe", gate_loss) 
             #print("loss supervised_gate_loss", supervised_gate_loss) 
@@ -1576,7 +1516,7 @@ def main():
 
         def _make_gate_input(self, lidar_values):
             # moyen d'opitmiser ici
-            filename = lidar_values['frame_id']
+            #filename = lidar_values['frame_id']
             
             #input_vec = load_tensor_just_one(filename[0], "256_desc_2025-06-23_11-22-13_run_0_4").to(device).float()
             input_vec = lidar_values['frame_id_desc'][0][0]
@@ -1860,9 +1800,7 @@ def main():
 
     if do_train:
 
-        if cfg['DATA_CONFIG']['DATASET'] == "LHD_dataset":
-            is_training = False
-            
+        if cfg['DATA_CONFIG']['DATASET'] == "LHD_dataset":            
             train_indices = all_train_indices
             val_indices = all_train_indices
 
@@ -1958,17 +1896,17 @@ def main():
                 id_max_length=ID_MAX_LENGTH
             ) 
 
-        is_trained = False
+        #is_trained = False
         if not os.path.isdir(previous_model_path) :
             if args.local_rank == 0 :
                 print("train from scratch : ",previous_model_path)
             trainer.train()
-            is_trained = True
+            #is_trained = True
         else :
             if args.local_rank == 0 :
                 print("resume_from_checkpoint : " + previous_model_path)
             trainer.train(resume_from_checkpoint=previous_model_path)
-            is_trained = True
+            #is_trained = True
 
     
     if do_eval  : 

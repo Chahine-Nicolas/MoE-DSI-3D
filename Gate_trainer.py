@@ -136,12 +136,11 @@ def load_set_ids(root_path, filename):
 
 def load_all_indices(root_path, list_seq, split):
     """
-    Charge automatiquement :
+    Load :
         zone_A_dsi_train_list.json
         zone_B_dsi_train_list.json
         ...
 
-    en fonction de list_seq.
     """
 
     data = {}
