@@ -3,7 +3,6 @@ import _init_path
 import argparse
 import datetime
 import copy 
-import traceback
 import math
 import gc
 import json
@@ -12,7 +11,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-import matplotlib.pyplot as plt
 
 from pathlib import Path
 from extern.log3dnet.SOP import SOP
