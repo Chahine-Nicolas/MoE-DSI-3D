@@ -1,7 +1,8 @@
 DATASET: 'LHD_dataset'
 
 SEQ: ''
-DATA_PATH: 'lidarhd_path'
+#DATA_PATH: 'lidarhd_path'
+DATA_PATH: '/mnt/c/Users/chahi/Desktop/these/code/temp/data/lidarhd_v2'
 
 BACKEND: &BACKEND
   NAME: HardDiskBackend

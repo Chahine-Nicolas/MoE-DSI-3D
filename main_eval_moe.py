@@ -1,73 +1,43 @@
+import os
 import _init_path
 import argparse
 import datetime
-import glob
-
-# Avoid tokenizers parallelism fork warning
-import os
-os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-
-
-
-from pathlib import Path
-from extern.log3dnet.SOP import SOP
-from collections import Counter
-from dataclasses import replace 
-import time
-# 
-import torch.distributed as dist
-#from torch.nn.parallel import DistributedDataParallel as DDP
-
-import hostlist
+import copy 
+import math
+import gc
+import json
 
 import torch
 import torch.nn as nn
-from tensorboardX import SummaryWriter 
-import copy 
-import traceback
-import logging
-
-from extern.pcdet.config import cfg, cfg_from_list, cfg_from_yaml_file, log_config_to_file
-from extern.pcdet.datasets import build_dataloader
-from extern.pcdet.utils import common_utils
-#from extern.train_utils.optimization import build_optimizer, build_scheduler
-#from extern.train_utils.train_utils import train_model
+import torch.nn.functional as F
 import numpy as np
 
-## Blip2
-import requests
-from PIL import Image
-from transformers import AutoProcessor,AutoModel, AutoConfig, AutoTokenizer, TrainingArguments , HfArgumentParser
-from extern.blip2.modeling_blip_2 import Blip2ModelQuerryLearning
-from extern.blip2.processing_blip_2 import Blip2Processor
-from transformers import BertTokenizer, BertModel,BertLMHeadModel,MT5Tokenizer
-from extern.blip2.modeling_bert_generation   import BertGenerationDecoder
-from transformers import  GPTQConfig
+from pathlib import Path
+from extern.log3dnet.SOP import SOP
+from dataclasses import replace 
+
+from extern.pcdet.config import cfg, cfg_from_yaml_file, log_config_to_file
+from extern.pcdet.datasets import build_dataloader
+from extern.pcdet.utils import common_utils
+
+from transformers import AutoProcessor, AutoConfig, AutoTokenizer, TrainingArguments , HfArgumentParser, TrainerCallback
 
 ## DSI QG
 from dataclasses import dataclass
 from transformers.trainer import Trainer
-from transformers import PreTrainedTokenizer, DataCollatorWithPadding,PretrainedConfig
+from transformers import DataCollatorWithPadding
+from transformers.modeling_outputs import ModelOutput
 from typing import Dict, List, Tuple, Optional, Any, Union
-from transformers import   MT5ForConditionalGeneration
-from extern.git.modeling_git import GitModel,GitForCausalLM
-
-from evaluate_log3dnet_80_20 import eval_log3dnet
-#from evaluate_overfit import eval_overfit
-#from compute_hierarchical_index import compute_hierarchical_clustering
-
-import json
-from tqdm import tqdm
-import matplotlib.pyplot as plt
-from transformers import TrainerCallback
+from extern.git.modeling_git import GitForCausalLM
+from evaluate_moe import eval_log3dnet
 
 ##################################
 # read pos
-# #################################
+##################################
 from module_loader_kitti_pose import * # add for more metrics
-import math
-import gc
 
+
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 WORK_PATH = os.getenv('WORKSF')
 
 ## ====  Usefull stuff =======
@@ -95,7 +65,7 @@ def get_pts_for_plot(query_idx,eval_seq,tfs,pose) :
     #load points
     xyz = np.fromfile(fname, dtype=np.float32).reshape(-1, 4)
     # every possible positions
-    x, z, y = pose[:,0], pose[:,1], pose[:,2]
+    #x, z, y = pose[:,0], pose[:,1], pose[:,2]
 
     # rotation 1
     out = np.zeros((len(xyz), 3))
@@ -112,39 +82,15 @@ def get_pts_for_plot(query_idx,eval_seq,tfs,pose) :
     return xyzrf
     
 def print_loader(loader,lab) :
-    do_dump_image = False
     lit = iter(loader)
-
-    eval_seq = cfg['DATA_CONFIG']['SEQ']
-    kitti_dir = WORK_PATH+"/datas/datasets/"
     print("")
     print("=========  loader " + lab + " ===========")
     print("ln : " + str(len(loader)))
     acc = 0
     os.makedirs("plot_" + lab, exist_ok=True)
-    sequence_path = kitti_dir + 'sequences/' + eval_seq + '/'
-    #tfs, pose = load_poses_from_txt(sequence_path + 'poses.txt')
     for ii in lit :
         print("id:" + str(ii['id']) + " gt:" + str(ii['gt']) + " labels:" + str(ii['labels']) ) #+ " gps_label:" + str(ii['gps']))
         acc = acc+1
-
-        if do_dump_image : 
-            xyzrf = get_pts_for_plot(int(ii['id']),eval_seq,tfs,pose)
-            if int(ii['gt']) > 0:
-                xyzrf_gt = get_pts_for_plot(int(ii['gt']),eval_seq,tfs,pose)
-            x, z, y = pose[:,0], pose[:,1], pose[:,2]
-            plt.figure()
-            plt.scatter(xyzrf[:, 0], xyzrf[:, 2], c='b', s=0.05,marker='x')
-            if int(ii['gt']) > 0:
-                plt.scatter(xyzrf_gt[:, 0], xyzrf_gt[:, 2], c='r', s=0.05,marker='o')
-            plt.scatter(x,z,c='g', s=0.1)
-            plt.xlabel("X")
-            plt.ylabel("z")
-            plt.title("query "+str(ii['id']) )
-            plt.axis('equal')
-            plt.savefig('plot_' + lab + '/query_'+str(ii['id']) +'.png',dpi=600)
-        
-        #import pdb; pdb.set_trace()
         if(acc > 64) :
             print("....")
             break
@@ -183,11 +129,9 @@ def parse_config():
     parser.add_argument('--git_checkpoint', type=str, default=None, help='specify the config for training')
     parser.add_argument('--eval_checkpoint', type=str, default=None, help='specify the config for training')
     parser.add_argument('--resume_from_checkpoint', type=str, default=None, help='specify the config for training')
-
-    
+ 
     parser.add_argument('--per_device_train_batch_size', type=int, default=32, required=False, help='batch size for training DSI')
     parser.add_argument('--per_device_eval_batch_size', type=int, default=4, required=False, help='batch size for training DSI')
-
 
     parser.add_argument('--do_train', type=str, default="False", help='')
     parser.add_argument('--do_eval', type=str, default="False", help='')
@@ -219,8 +163,7 @@ def parse_config():
     #parser.add_argument('--ckpt_save_interval', type=int, default=1, help='number of training epochs')
     parser.add_argument('--max_ckpt_save_num', type=int, default=30, help='max number of saved checkpoint')
     parser.add_argument('--merge_all_iters_to_one_epoch', action='store_true', default=False, help='')
-    parser.add_argument('--set', dest='set_cfgs', default=None, nargs=argparse.REMAINDER,
-                        help='set extra config keys if needed')
+    parser.add_argument('--set', dest='set_cfgs', default=None, nargs=argparse.REMAINDER, help='set extra config keys if needed')
 
     parser.add_argument('--max_waiting_mins', type=int, default=1, help='max waiting minutes')
     parser.add_argument('--start_epoch', type=int, default=0, help='')
@@ -228,7 +171,6 @@ def parse_config():
     parser.add_argument('--save_to_file', action='store_true', default=False, help='')
     parser.add_argument('--remove_unused_columns', type=bool, default=False, help='')
 
-    
     parser.add_argument('--dataloader_pin_memory', type=bool, default=False, help='')
     parser.add_argument('--fuse_conv_bn', action='store_true', default=False, help='')
     parser.add_argument('--output_dir', type=str, default=None, help='output_dir')
@@ -255,37 +197,61 @@ def parse_config():
 
 ##############################################################################
 # Optimisé make_compute_metrics
-# #############################################################################
-def make_compute_metrics(tokenizer, logger, rank, positions_database, label_mapping, save_file_name):
+##############################################################################
+def make_compute_metrics(tokenizer, logger, rank, positions_database, label_mapping, label_mapping_val, save_file_name):
+#def make_compute_metrics(tokenizer, logger, rank, train_set, sequence_path, d=None):
     def compute_metrics(eval_preds):
         hit_at_1, hit_at_10 = 0, 0
+        print("inside compute metrics")
         for beams, label in zip(eval_preds.predictions, eval_preds.label_ids):
             rank_list = tokenizer.batch_decode(beams, skip_special_tokens=True)
             label_id = tokenizer.decode(label, skip_special_tokens=True)
-            query_id = label_mapping.get(label_id, label_id) # (keyname, value=value to return if the specified key does not exist)
-            answers_ids = [label_mapping.get(x, x) for x in rank_list]
             
+            #query_id = label_mapping.get(label_id, label_id) # (keyname, value=value to return if the specified key does not exist)
+            query_id = label_mapping_val[label_id]
+            answers_ids = [label_mapping.get(x, x) for x in rank_list]
+            #print("query_id ", query_id)
+            #print("answers_ids ", answers_ids)
             # Position-based metrics
-            label_id_gps = positions_database[int(query_id)]
-            rank_list_gps = [positions_database[int(x)] for x in answers_ids]
+            #label_id_gps = positions_database[int(query_id)]
+            #rank_list_gps = [positions_database[int(x)] for x in answers_ids]
+
+            label_id_gps = positions_database.get(query_id, [-10, -10])
+            rank_list_gps = [positions_database.get(x, [-10, -10]) for x in answers_ids]
+
+            print("query ", os.path.basename(query_id) )
+            print("Top1  ", os.path.basename(answers_ids[0]) )
+            
             rank_list_dist = [
                 math.dist(label_id_gps[:2], rank_list_gps[i][:2]) for i in range(len(rank_list_gps))
             ]
-            rank_list_dist_filter = [1 if dist <= 3 else 0 for dist in rank_list_dist]
-
+            #print("rank_list_dist ", rank_list_dist)
+            
+            rank_list_dist_filter = [1 if dist <= 1 else 0 for dist in rank_list_dist]
+            print("rank_list_dist_filter ", rank_list_dist_filter)
+            
             hits_clos = np.where(np.array(rank_list_dist_filter)[:10] == 1)[0]
             if hits_clos.size > 0:
                 hit_at_10 += 1
-                if hits_clos[0] == 0:
+                if hits_clos[0] == 0: 
                     hit_at_1 += 1
-
+                    
+        #hit_at_1_tensor = torch.tensor(hit_at_1, device="cuda")
+        #hit_at_10_tensor = torch.tensor(hit_at_10, device="cuda")
+        #dist.all_reduce(hit_at_1_tensor, op=dist.ReduceOp.SUM)
+        #dist.all_reduce(hit_at_10_tensor, op=dist.ReduceOp.SUM)
 
         total_predictions = len(eval_preds.predictions)
 
         #######################################################################
-        # save validation metrics
+        # save metrics
+        #######################################################################
         with open(save_file_name, 'a') as f:
             f.write(str(hit_at_1 / total_predictions ) + " " + str(hit_at_10 / total_predictions ) + "\n")
+        #f.close()
+        print("hit_at_1 ", hit_at_1, " hit_at_10 ", hit_at_10, " total_predictions " , total_predictions )
+
+        #######################################################################
         #######################################################################
         
         return {
@@ -327,7 +293,7 @@ class DSITrainer(Trainer):
         
         model.eval()
         
-        vv = self.tokenizer.batch_decode(inputs["labels"],skip_special_tokens=True)
+        #vv = self.tokenizer.batch_decode(inputs["labels"],skip_special_tokens=True)
         self.ll1 = []
 
         with torch.no_grad():
@@ -338,6 +304,9 @@ class DSITrainer(Trainer):
             
             # Remove ids from inputs
             ids = inputs.pop('ids')
+            
+            self.id_max_length = 10
+            nb_beam = 10
             
             batch_beams_dict = model.generate(
                 pixel_values=inputs['pixel_values'],
@@ -356,26 +325,35 @@ class DSITrainer(Trainer):
                 output_scores = True,
             )
 
+            
+            
             # Extract generated sequences and scores
             batch_beams = batch_beams_dict['sequences']
-            seq_score = batch_beams_dict['sequences_scores'].reshape(batch_size, nb_beam)
+            #seq_score = batch_beams_dict['sequences_scores'].reshape(batch_size, nb_beam)
 
             # Pad sequences to the maximum length
-            batch_beams = self._pad_tensors_to_max_len(batch_beams, self.id_max_length, self.tokenizer)
+            #batch_beams = self._pad_tensors_to_max_len(batch_beams, self.id_max_length, self.tokenizer)
             inputs['labels'] = self._pad_tensors_to_max_len(inputs['labels'], self.id_max_length, self.tokenizer)
             
             # Reshape beams for batch-wise operations
             batch_beams = batch_beams.reshape(batch_size, nb_beam, -1)
-             
+
+
             # Optional: Debugging/logging for predictions
+            batch_score =0
             for ii in range(batch_size):
                 decoded_labels = self.tokenizer.batch_decode(batch_beams[ii].cpu(), skip_special_tokens=True)
                 print(f"IDs: {ids[ii]}")
                 print(f"Labels: {self.tokenizer.decode(inputs['labels'][ii], skip_special_tokens=True)}")
                 print(f"Beams: {decoded_labels}")
-                print(f"Scores: {seq_score[ii]}")
+                #print(f"Scores: {seq_score[ii]}")
                 print("----")
 
+                if decoded_labels == self.tokenizer.decode(inputs['labels'][ii], skip_special_tokens=True):
+                    batch_score += 1
+            print("% correct ", batch_score/batch_size)
+
+               
         return None, batch_beams, inputs['labels'] # loss, logits, labels
 
 
@@ -396,6 +374,7 @@ class DSITrainer(Trainer):
 ##############################################################################
 # Optimisé IndexingCollator
 # #############################################################################
+
 class IndexingCollator(DataCollatorWithPadding):
     def __init__(self, label_tokenizer, padding, id_max_length, processor, batch_size):
         super().__init__(label_tokenizer, padding)
@@ -408,6 +387,7 @@ class IndexingCollator(DataCollatorWithPadding):
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
         # Extract features
+    
         input_ids = torch.vstack([x['input_ids'] for x in features])
         labels = input_ids.clone()
         ids = [x['id'] for x in features]
@@ -420,21 +400,22 @@ class IndexingCollator(DataCollatorWithPadding):
 
         # Prepare `inputs` dictionary
         inputs = {
-            'input_ids': input_ids,
-            'labels': labels,
+            'input_ids': input_ids.to(device=device),
+            'labels': labels.to(device=device),
             'ids': ids,
             'pixel_values': pixel_values,
             'attention_mask': attention_mask.to(device=device),
         }
-
+        
         # Process LIDAR values
         lidar_values = self._prepare_lidar_values(features, device)
         inputs['lidar_values'] = lidar_values
+        inputs['lidar_values']['pixel_values'] = inputs['pixel_values']
         
         # Load LIDAR data to GPU if available
         if device == "cuda":
             load_data_to_gpu(inputs['lidar_values'])
-            
+
         return inputs
 
     def _prepare_lidar_values(self, features, device):
@@ -443,22 +424,15 @@ class IndexingCollator(DataCollatorWithPadding):
         feature_dict = {k: [x[k] for x in features] for k in features[0].keys()}
         
         for key, val in feature_dict.items():
-            if key == 'points':
-        
-                padded_points = [torch.nn.functional.pad(
-                    torch.tensor(coor, dtype=torch.float32),
-                    (0, 0, 1, 0), 
-                    value=i  
-                ) for i, coor in enumerate(val)]
-                lidar_val[key] = torch.cat(padded_points, dim=0).to(device)
-            elif key == 'desc':
+            if key in ['frame_id', 'id_pcd_positif', 'id_pcd_negatif', 'other_id_pcd_negatif']:
+                lidar_val[key] = np.stack(val, axis=0) 
+                
+            if key in ['frame_id_desc', 'id_pcd_positif_desc', 'id_pcd_negatif_desc', 'other_id_pcd_negatif_desc']:
                 lidar_val[key] = val 
-            else:
-                lidar_val[key] = np.stack(val, axis=0)  
-        
+                
         return lidar_val
-        ##############################################################################
-        ##############################################################################
+##############################################################################
+##############################################################################
         
 class EarlyStoppingCallback(TrainerCallback):
     def __init__(self, metric_name="", threshold=1):
@@ -545,16 +519,14 @@ def main():
 
     args, cfg = parse_config()
     ID_MAX_LENGTH = args.id_max_length 
-    MAX_LENGTH = ID_MAX_LENGTH
+    #MAX_LENGTH = ID_MAX_LENGTH
 
     model_name = args.model_name
-    dataset_train_len = args.dataset_train_len
-    
-    dataset_eval_len = args.dataset_eval_len
+    #dataset_train_len = args.dataset_train_len
+    #dataset_eval_len = args.dataset_eval_len
 
     checkp_to_eval = args.eval_chkt
     
-    do_overfit = True
     random_seed = int(args.fix_random_seed)
     do_use_sop = eval(args.use_sop)
     if args.launcher == "pytorch" : 
@@ -566,8 +538,17 @@ def main():
     ##########################################################################################
     save_file_name = args.save_hit_file # new for naming file hit score
     with open(save_file_name, 'w') as f:
-        print('create and reset the txt output file ', save_file_name)
+        print('create and reset the hit txt output file ', save_file_name)
     f.close()
+    
+    with open("loss.txt", 'w') as f:
+        print('create and reset the loss txt output file loss.txt')
+    f.close()
+
+    with open("distribution.txt", 'w') as f:
+        print('create and reset the loss txt output file loss.txt')
+    f.close()
+
     ##########################################################################################
 
     do_train = eval(args.do_train)
@@ -657,15 +638,17 @@ def main():
     if args.local_rank == 0 :
         logger.info("Initializing dataset and dataloader...")
 
-    train_set, train_loader, _ = initialize_dataloader(cfg, args, logger, training=True)
+    #train_set, train_loader, _ = initialize_dataloader(cfg, args, logger, training=True)
     eval_set, eval_loader, _ = initialize_dataloader(cfg, args, logger, training=False)
     
     # Determine subset lengths
+    """
     train_len = (
     int(args.dataset_train_len)
     if args.dataset_train_len > 0
     else len(train_set)
     )
+    """
     eval_len = (
         int(args.dataset_eval_len)
         if args.dataset_eval_len > 0
@@ -673,11 +656,11 @@ def main():
     )
     
     # Create subsets
-    train_subset = torch.utils.data.Subset(train_set, range(0, train_len))
+    #train_subset = torch.utils.data.Subset(train_set, range(0, train_len))
     eval_subset = torch.utils.data.Subset(eval_set, range(0, eval_len))
     
     # Log dataset information
-    print_loader(train_subset, 'train')
+    #print_loader(train_subset, 'train')
     print_loader(eval_subset, 'eval')
         
     ### ========= build Models ===========
@@ -709,8 +692,7 @@ def main():
         
         # Load GIT configuration and model
         config = AutoConfig.from_pretrained(model_dsi_path)
-        #config.vocab_size = 1000
-        #import pdb; pdb.set_trace()
+
         model_dsi = GitForCausalLM(config).to(device=device)
         tokenizer = AutoTokenizer.from_pretrained(model_dsi_path)
         
@@ -729,38 +711,6 @@ def main():
             model_dsi.set_output_embeddings(output_embeddings)
             model_dsi.lidar_model.set_lidar_encoder(model, lidar_projection, bt_norm)
 
-    elif model_name == "blip2":
-        model_dsi_path = model_paths["blip2"]
-        if args.local_rank == 0 :
-            logger.info(f"Initializing BLIP2 model from {model_dsi_path}...")
-    
-        # Load BLIP2 configuration and model
-        config = AutoConfig.from_pretrained(model_dsi_path)
-        model_dsi = Blip2ModelQuerryLearning(config=config).to(device=device).type(torch.float32)
-        tokenizer = AutoTokenizer.from_pretrained(model_paths["bert_base"])
-        
-        # Reset BLIP2 parameters if specified
-        if args.reset_model:
-            if args.local_rank == 0 :
-                logger.info("Resetting BLIP2 Q-former and weights...")
-            model_dsi.reset_q()
-            try:
-                model_dsi.qformer.apply(weight_reset)
-            except Exception as e:
-                logger.error(f"Failed to reset Q-former weights: {traceback.format_exc()}")
-        
-        # Set lidar model with SOP
-        model_sop = SOP(signed_sqrt=False, do_fc=False)
-        model_dsi.lidar_model.sop = model_sop
-        if args.git_checkpoint:
-            if args.local_rank == 0 :
-                logger.info("Restoring BLIP2 input/output embeddings and lidar parameters...")
-            model_dsi.set_input_embeddings(model_dsi.bert.embeddings, input_embeddings)
-            model_dsi.set_output_embeddings(output_embeddings)
-            model_dsi.lidar_model.set_lidar_encoder(model, lidar_projection, bt_norm)
-        else:
-            model_dsi.lidar_model.set_lidar_model(model, model_sop, do_use_sop, eval_set.root_path)
-    
     else:
         logger.error(f"Unsupported model name: {model_name}. Must be 'git' or 'blip2'.")
 
@@ -772,8 +722,8 @@ def main():
 
     ### ===== Processor / Tokenizer =====
     processor = AutoProcessor.from_pretrained(model_dsi_path)
-    spe_tok = ['[CLS]', '[MASK]', '[PAD]', '[SEP]','[BOS]','[EOS]']
-    ukn = tokenizer.convert_tokens_to_ids('[UNK]') # = 100
+    #spe_tok = ['[CLS]', '[MASK]', '[PAD]', '[SEP]','[BOS]','[EOS]']
+    #ukn = tokenizer.convert_tokens_to_ids('[UNK]') # = 100
     tokenizer.bos_token_id = tokenizer.convert_tokens_to_ids(tokenizer.bos_token) # ' '
     tokenizer.eos_token_id = tokenizer.convert_tokens_to_ids(tokenizer.eos_token) # ' '
     tokenizer.pad_token_id = tokenizer.convert_tokens_to_ids(tokenizer.pad_token) # = 0
@@ -815,7 +765,7 @@ def main():
     ############################################################
     # create ID and token lists
     n_subset = [int(x) for x in range(len(eval_subset))] 
-    n_set = [int(x) for x in range(len(eval_set))] 
+    #n_set = [int(x) for x in range(len(eval_set))] 
     lid = []
     LIK = []
     for ii in n_subset : lid.append(eval_set.get_label(ii))    
@@ -843,8 +793,8 @@ def main():
     n_subset = [int(x) for x in range(len(eval_subset))] 
     lid = [eval_set.get_label(ii) for ii in n_subset]
     LIK = [tokenizer(ii, padding="max_length", max_length=ID_MAX_LENGTH).input_ids for ii in lid]
-    prefix_dict = build_prefix_dict_filter(LIK)
-    
+    prefix_dict = build_prefix_dict_filter(LIK) # bien pour toutes les zones
+
     # Optimized restrict_decode_vocab
     def restrict_decode_vocab_v3(batch_idx, prefix_beam):
         pfb = tuple(prefix_beam.cpu().numpy())  
@@ -891,8 +841,8 @@ def main():
 
 
     
-    train_indices_path = "id_zone_C_dsi_train_list.json"
-    val_indices_path = "id_zone_C_dsi_val_list.json"
+    train_indices_path = "id_zone_A_dsi_train_list.json"
+    val_indices_path = "id_zone_A_dsi_val_list.json"
 
     print("train_indices_path ", train_indices_path)
     print("val_indices_path ", val_indices_path)
@@ -900,7 +850,14 @@ def main():
     train_indices = json.load(f)
     f.close()
 
-
+    
+    def load_set_ids(train_indices_path, sequence_path):
+        print("train_indices_path ", train_indices_path)
+        f = open(sequence_path +"/"+ train_indices_path) 
+        train_indices = json.load(f)
+        f.close()
+        return train_indices
+    
     def load_training_set_ids(train_indices_path, val_indices_path):
         print("train_indices_path ", train_indices_path)
         print("val_indices_path ", val_indices_path)
@@ -911,29 +868,96 @@ def main():
         
         return train_indices
 
-
+    
     train_indicesa = load_training_set_ids("id_zone_A_dsi_train_list.json", "id_zone_A_dsi_val_list.json")
     train_indicesb = load_training_set_ids("id_zone_B_dsi_train_list.json", "id_zone_B_dsi_val_list.json")
     train_indicesc = load_training_set_ids("id_zone_C_dsi_train_list.json", "id_zone_C_dsi_val_list.json")
     train_indicesd = load_training_set_ids("id_zone_D_dsi_train_list.json", "id_zone_D_dsi_val_list.json")
-
-
     """
-    train_subseta = torch.utils.data.Subset(train_set, train_indicesa)
-    train_subsetb = torch.utils.data.Subset(train_set, train_indicesb)
-    train_subsetc = torch.utils.data.Subset(train_set, train_indicesc)
-    train_subsetd = torch.utils.data.Subset(train_set, train_indicesd)
+
+    train_indicesa = load_training_set_ids("id_small_list_A.json", "id_small_list_A.json")
+    train_indicesb = load_training_set_ids("id_small_list_B.json", "id_small_list_B.json")
+    train_indicesc = load_training_set_ids("id_small_list_C.json", "id_small_list_C.json")
+    train_indicesd = load_training_set_ids("id_small_list_D.json", "id_small_list_D.json")
     """
+
     all_train_indices = train_indicesa + train_indicesb + train_indicesc + train_indicesd
 
-    train_subset = torch.utils.data.Subset(train_set, all_train_indices)
+
+
+    name_train_indicesa = load_training_set_ids("zone_A_dsi_train_list.json", "zone_A_dsi_val_list.json")
+    name_train_indicesb = load_training_set_ids("zone_B_dsi_train_list.json", "zone_B_dsi_val_list.json")
+    name_train_indicesc = load_training_set_ids("zone_C_dsi_train_list.json", "zone_C_dsi_val_list.json")
+    name_train_indicesd = load_training_set_ids("zone_D_dsi_train_list.json", "zone_D_dsi_val_list.json")
+
     """
-    print("len train_subseta", len(train_subseta))
-    print("len train_subsetb", len(train_subsetb))
-    print("len train_subsetc", len(train_subsetc))
-    print("len train_subsetd", len(train_subsetd))
+    name_train_indicesa = load_training_set_ids("small_list_A.json", "small_list_A.json")
+    name_train_indicesb = load_training_set_ids("small_list_B.json", "small_list_B.json")
+    name_train_indicesc = load_training_set_ids("small_list_C.json", "small_list_C.json")
+    name_train_indicesd = load_training_set_ids("small_list_D.json", "small_list_D.json")
     """
-    print("len train_subset", len(train_subset))
+    
+    all_names = [
+        name_train_indicesa,
+        name_train_indicesb,
+        name_train_indicesc,
+        name_train_indicesd
+    ]
+
+    ########################################################
+    # ground truth frame_id distribution
+    ########################################################
+    path_to_ids = {}
+    
+    for idx, name_list in enumerate(all_names):
+        for path in name_list:
+            base = os.path.basename(path)  # extract filename
+            if base not in path_to_ids:
+                path_to_ids[base] = []
+            path_to_ids[base].append(idx)
+    
+    # Optional: sort IDs in each list
+    for base in path_to_ids:
+        path_to_ids[base].sort()
+    
+    # Example output
+    for k, v in list(path_to_ids.items())[:5]:
+        print(k, ":", v)
+        
+
+    ########################################################
+    
+    eval_name_a = load_set_ids("zone_A_dsi_eval_list.json", sequence_path)
+    eval_name_b = load_set_ids("zone_B_dsi_eval_list.json", sequence_path)
+    eval_name_c = load_set_ids("zone_C_dsi_eval_list.json", sequence_path)
+    eval_name_d = load_set_ids("zone_D_dsi_eval_list.json", sequence_path)
+    
+    all_names = [
+        eval_name_a,
+        eval_name_b,
+        eval_name_c,
+        eval_name_d
+    ]
+    ########################################################
+    # ground truth frame_id distribution
+    ########################################################
+    
+    for idx, name_list in enumerate(all_names):
+        for path in name_list:
+            base = os.path.basename(path)  # extract filename
+            if base not in path_to_ids:
+                path_to_ids[base] = []
+            path_to_ids[base].append(idx)
+    
+    # Optional: sort IDs in each list
+    for base in path_to_ids:
+        path_to_ids[base].sort()
+    
+    # Example output
+    for k, v in list(path_to_ids.items())[:5]:
+        print(k, ":", v)
+        
+    expert_labels = path_to_ids
 
     ################################################################################################################################################
     # Mixture-of-Experts Setup
@@ -954,409 +978,470 @@ def main():
                 return None
         return torch.stack(xx)
 
+    def load_tensor_just_one(nn,lab) :
+        xx = []
+        fname = root_path + "/" +  lab + "/" +  (nn+'.pt')
+        if os.path.isfile(fname) : 
+            xx1 = torch.load(fname, map_location='cuda')
+            xx.append(xx1)
+        else :
+            print("TENSOR NOT FOUND")
+            print(fname)
+            return None
+        return torch.stack(xx)
+
+        
+
     checkpoint_paths = ["../checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
                         "../checkpoints/git_hilbert_train_B0/checkpoint-7200/pytorch_model.bin",
                         "../checkpoints/git_hilbert_train_C02/checkpoint-7000/pytorch_model.bin",
-                        "../checkpoints/git_hilbert_new_tokenizer_D0/checkpoint-6100/pytorch_model.bin",
+                        "../checkpoints/git_hilbert_train_DO2/checkpoint-1400/pytorch_model.bin"
                        ]
 
     transformer_list = []
-
+    
     for chkp in checkpoint_paths:
-        state_dict = torch.load(chkp)
-        model_dsi.load_state_dict(state_dict, strict=False)
-        model_dsi.eval()
-        transformer_list.append(model_dsi)
+        model_copy = copy.deepcopy(model_dsi) # clone current architecture
+        state_dict = torch.load(chkp, map_location="cpu")
+        model_copy.load_state_dict(state_dict, strict=False)
+        model_copy.eval()
+        model_copy.to(device)
+        transformer_list.append(model_copy)
 
     
-    """
-    class TransformerExperts(nn.Module):
-        def __init__(self, transformer_list):
-            super().__init__()
-            self.experts = nn.ModuleList(transformer_list)  # each is a full model
-    
-        def forward(self, x, input_data):
-            print(x)
-            output = torch.zeros(256, device=x.device)
-            return output
 
-    experts = TransformerExperts(transformer_list)
+    @dataclass
+    class MoEOutput(ModelOutput):
+        loss: torch.FloatTensor = None
+        logits: torch.FloatTensor = None
+        gate_weights: torch.FloatTensor = None
+
+
+    # the below code is almost all transcribed from the official tensorflow version, from which the papers are written
+    # https://github.com/tensorflow/tensor2tensor/blob/master/tensor2tensor/models/research/moe.py
+    
+    # gating network
+
+    def top1(t):
+        values, index = t.topk(k=1, dim=-1)
+        values, index = map(lambda x: x.squeeze(dim=-1), (values, index))
+        return values, index
+
+    def cumsum_exclusive(t, dim=-1):
+        num_pad_dims = - dim - 1
+        pre_padding = (0, 0) * num_pad_dims
+        pre_slice   = (slice(None),) * num_pad_dims
+        padded_t = F.pad(t, (*pre_padding, 1, 0)).cumsum(dim=dim)
+        return padded_t[(..., slice(None, -1), *pre_slice)]
+
+
+    def safe_one_hot(indexes, max_length):
+        max_index = indexes.max() + 1
+        return F.one_hot(indexes, max(max_index + 1, max_length))[..., :max_length]
+
+    class ExpertClassifier(nn.Module):
+        def __init__(self, input_dim=256, num_experts=4):
+            super(ExpertClassifier, self).__init__()
+            self.model = nn.Sequential(
+                nn.Linear(input_dim, 256),
+                nn.BatchNorm1d(256),
+                nn.ReLU(),
+    
+                nn.Linear(256, 1024),
+                nn.BatchNorm1d(1024),
+                nn.ReLU(),
+    
+                nn.Linear(1024, 256),
+                nn.BatchNorm1d(256),
+                nn.ReLU(),
+    
+                nn.Linear(256, num_experts)
+            )
         
-    import pdb; pdb.set_trace()
-    
-    from mixture_of_experts import MoE
-    """
-    
-    #moe = MoE(dim = 256, num_experts = 4, experts = experts).to(device)
-    
+        def forward(self, x):
+            return self.model(x)
 
+    
+    class Top2Gating(nn.Module):
+        def __init__(
+            self,
+            dim,
+            num_gates,
+            eps = 1e-9,
+            outer_expert_dims = tuple(),
+            second_policy_train = 'random',
+            second_policy_eval = 'random',
+            second_threshold_train = 0.2,
+            second_threshold_eval = 0.2,
+            capacity_factor_train = 1.25,
+            capacity_factor_eval = 2.):
+            super().__init__()
+    
+            self.eps = eps
+            self.num_gates = num_gates
+            
+            self.w_gating = nn.Parameter(torch.randn(*outer_expert_dims, dim, num_gates))
+            
+            self.gate = ExpertClassifier(input_dim=256, num_experts=4)
+            self.gate.load_state_dict(torch.load("gate_EST.pth"))
+            self.gate.to(next(self.parameters()).device)
+            self.gate.eval()
+            
+            self.second_policy_train = second_policy_train
+            self.second_policy_eval = second_policy_eval
+            self.second_threshold_train = second_threshold_train
+            self.second_threshold_eval = second_threshold_eval
+            self.capacity_factor_train = capacity_factor_train
+            self.capacity_factor_eval = capacity_factor_eval
+    
+        def forward(self, x, importance = None):
+            #*_, b, group_size, dim = x.shape
+            group_size, dim = x.shape #[1,256]
+            #b = group_sizes
+            num_gates = self.num_gates
+    
+            if self.training: # true
+                policy = self.second_policy_train # 'random'
+                threshold = self.second_threshold_train 
+            else:
+                policy = self.second_policy_eval
+                threshold = self.second_threshold_eval
+    
+            raw_gates = self.gate(x) 
+            raw_gates = raw_gates.softmax(dim=-1)
+    
+            gate_1, index_1 = top1(raw_gates) 
+            mask_1 = F.one_hot(index_1, num_gates).float() 
+            density_1_proxy = raw_gates
+            
+            if importance is not None: # True
+                equals_one_mask = (importance == 1.).float()
+                mask_1 *= equals_one_mask[..., None]
+                gate_1 *= equals_one_mask
+                density_1_proxy = density_1_proxy * equals_one_mask[..., None]
+                del equals_one_mask
+                
+            gates_without_top_1 = raw_gates * (1. - mask_1)
+    
+            gate_2, index_2 = top1(gates_without_top_1) # (tensor([[[0.1576]]]), tensor([[[3]]]))
+            mask_2 = F.one_hot(index_2, num_gates).float() # tensor([[[[0., 0., 0., 1.]]]])
+
+
+            if importance is not None:
+                greater_zero_mask = (importance > 0.).float()
+                mask_2 *= greater_zero_mask[..., None]
+                del greater_zero_mask
+
+            # normalize top2 gate scores
+            denom = gate_1 + gate_2 + self.eps
+            gate_1 = gate_1 / denom 
+            gate_2 = gate_2 / denom
+            
+            # BALANCING LOSSES
+            # shape = [batch, experts]
+            # We want to equalize the fraction of the batch assigned to each expert
+            density_1 = mask_1.mean(dim=-2) # tensor([[[1., 0., 0., 0.]]])
+            # Something continuous that is correlated with what we want to equalize.
+            density_1_proxy = density_1_proxy.mean(dim=-2) # tensor([[[0.7157, 0.0576, 0.0691, 0.1576]]])
+            loss = (density_1_proxy * density_1).mean() * float(num_gates ** 2) # tensor(0.1789) * 16
+
+            # Depending on the policy in the hparams, we may drop out some of the
+            # second-place experts.
+            if policy == "all":
+                pass
+            elif policy == "none":
+                mask_2 = torch.zeros_like(mask_2)
+            elif policy == "threshold":
+                mask_2 *= (gate_2 > threshold).float()
+            elif policy == "random":
+                probs = torch.zeros_like(gate_2).uniform_(0., 1.) # tensor([[[0.3690]]])
+                mask_2 *= (probs < (gate_2 / max(threshold, self.eps))).float().unsqueeze(-1)
+            else:
+                raise ValueError(f"Unknown policy {policy}")
+
+            Top1 = True
+            top_all = False
+            if Top1:
+                print("Gate top-1")
+                CUSTOM_GATE = mask_1
+            elif top_all:
+                print("Gate top-4")
+                CUSTOM_GATE = raw_gates
+            else:
+                print("Gate top-2")
+                CUSTOM_GATE = gate_1.unsqueeze(-1) * mask_1 + gate_2.unsqueeze(-1) * mask_2
+
+            dispatch_tensor, combine_tensor, loss = None, None, loss
+            return dispatch_tensor, combine_tensor, loss, CUSTOM_GATE
+    
 
     class MoE_DSI(nn.Module):
-        def __init__(self, input_dim, experts):
+        def __init__(self, input_dim, experts, tokenizer, expert_labels):
             super().__init__()
             self.num_experts = len(experts)
-            self.experts = nn.ModuleList(experts)   # pretrained DSI models
-            for p in self.experts.parameters(): 
-                p.requires_grad = False   
-            self.gate = nn.Linear(input_dim, self.num_experts)
-    
-        def forward(self, x, input_data):
-            """
-            x: [batch, 256]   -> gate input
-            input_data: dict passed to experts
-            """
-            # --- Gate ---
-            gate_logits = self.gate(x)                   # [batch, num_experts]
-            gate_weights = torch.softmax(gate_logits, dim=-1)  # mixture weights
+            self.experts = nn.ModuleList(experts)
+            for p in self.experts.parameters():
+                #p.requires_grad = True
+                p.requires_grad = False
+                
+            #self.gate = nn.Linear(input_dim, self.num_experts)
 
-            print("gate_weights ", gate_weights)
+            self.tokenizer = tokenizer
+            self.expert_labels = expert_labels
+
+            gating_kwargs = {'second_policy_train': 'random', 'second_policy_eval': 'random', 'second_threshold_train': 0.2, 'second_threshold_eval': 0.2, 'capacity_factor_train': 1.25, 'capacity_factor_eval': 2}
+            self.gate = Top2Gating(256, num_gates = 4, **gating_kwargs)
+
+        # for training
+        def forward(self, input_ids=None, attention_mask=None, pixel_values=None, lidar_values=None, labels=None, **kwargs):
+            # ---- Gate input ----
+            vocab_size = 30522
+            print('inside forward')
+
+            ########################################################
+            # load descriptor from names
+            ########################################################
+            x = self._make_gate_input(lidar_values)  # -> [batch, 256]
+            ########################################################
+
+
+            dispatch_tensor, combine_tensor, gate_loss, CUSTOM_GATE = self.gate(x)
+            gate_weights = CUSTOM_GATE.to(device=lidar_values['pixel_values'].device)
+
+
+            ########################################################
+            # batch accuracy
+            ########################################################
+            frame_ids = [f[0] for f in lidar_values['frame_id']]
             
-            # --- Run Experts ---
+            pred_expert = CUSTOM_GATE.argmax(dim=-1)    
+            pred_expert_list = pred_expert.detach().cpu().tolist()
+            
+            # Check assignment correctness
+            for fid, pred in zip(frame_ids, pred_expert_list):
+                valid_experts = self.expert_labels.get(fid, [])
+                is_correct = pred in valid_experts
+                print(f"{fid}: predicted={pred}, valid={valid_experts}, correct={is_correct}")
+
+            correct = sum(pred in self.expert_labels.get(fid, []) 
+                for fid, pred in zip(frame_ids, pred_expert_list))
+            batch_acc = correct / len(frame_ids)
+            print(f"Gate assignment accuracy: {batch_acc:.2%}")
+            ########################################################
+            
+            # ---- Experts forward ----
+
+            batch_size = input_ids.shape[0] if input_ids is not None else lidar_values['pixel_values'].shape[0]
+            #seq_len = labels.shape[1] + 1 if labels is not None else 11 
+            
+
             all_outputs = []
-            count = 0
-            for expert in self.experts:
-                count += 1
-                print("run model ",count)
-                # run generation to get scores (logits per vocab)
-                out = expert.generate(
-                    pixel_values=input_data['pixel_values'],
-                    lidar_values=input_data['lidar_values'],
-                    points=None,
-                    max_length=10,
-                    num_beams=10,
-                    num_return_sequences=1,
-                    eos_token_id=3,
-                    pad_token_id=0,
-                    bos_token_id=2,
-                    renormalize_logits=False,
-                    early_stopping=False, 
-                    prefix_allowed_tokens_fn=restrict_decode_vocab_v3,
-                    return_dict_in_generate=True,                
-                    output_scores=True,
-                )
-                # `out.scores` is a tuple of [logits at each step]
-                # shape: (seq_len, batch * beams, vocab_size)
-                scores = torch.stack(out.scores, dim=0)  
-                all_outputs.append(scores)
-    
-            # --- Mix Experts ---
-            # all_outputs: list of [seq_len, batch*beams, vocab]
-            all_outputs = torch.stack(all_outputs, dim=0)   # [num_experts, seq_len, batch*beams, vocab]
             
-            # expand gate weights so we can weight expert outputs
-            # gate_weights: [batch, num_experts] → [num_experts, 1, batch*beams, 1]
-            gw = gate_weights.transpose(0,1).unsqueeze(1).unsqueeze(-1)
-    
-            # weighted sum over experts
-            mixed_output = torch.sum(all_outputs * gw, dim=0)  # [seq_len, batch*beams, vocab]
-    
-            return mixed_output, gate_weights
-
-
-    moe_model = MoE_DSI(input_dim=256, experts=transformer_list).to(device)
-
-    optimizer = torch.optim.Adam(moe_model.gate.parameters(), lr=1e-5)
-
-
-    num_epochs = 10
-    loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
-    
-    for epoch in range(num_epochs):
-        for query_idx in range(len(train_subset)):
-            query_idx = 0
-            input_data = data_collator(torch.utils.data.Subset(train_subset, range(query_idx, query_idx+1))) 
-            
-            lidar_values = input_data['lidar_values']
-            filename = lidar_values['frame_id']
-            input_vec = load_tensor(filename.flatten(),"256_desc_2025-06-23_11-22-13_run_0_4").to(device).float()
-
-            labels = input_data["labels"].to(device)
-            
-            logits, gate_weights = moe_model(input_vec, input_data)
-
-            vocab_size = logits.shape[-1]
-
-            token_ids = logits.argmax(dim=-1) 
-
-            
-            import pdb; pdb.set_trace()
-            
-            expert0 = transformer_list[0]
-            out0 = expert0.generate(
-                    pixel_values=input_data['pixel_values'],
-                    lidar_values=input_data['lidar_values'],
-                    points=None,
-                    max_length=10,
-                    num_beams=10,
-                    num_return_sequences=1,
-                    eos_token_id=3,
-                    pad_token_id=0,
-                    bos_token_id=2,
-                    renormalize_logits=False,
-                    early_stopping=False, 
-                    prefix_allowed_tokens_fn=restrict_decode_vocab_v3,
-                    return_dict_in_generate=True,                
-                    output_scores=True,
+            for e, expert in enumerate(self.experts):
+                out = expert(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    pixel_values=pixel_values,
+                    lidar_values=lidar_values,
+                    labels=None, 
+                    return_dict=True,
                 )
 
-            import pdb; pdb.set_trace()
+  
+                logits = out.logits  # [batch, seq_len, vocab]
+                logits_max = logits.argmax(dim=-1)
 
-            out = expert0(
-                input_ids=input_data["input_ids"],
 
-                inputs_embeds=input_vec
-                attention_mask=input_data["attention_mask"],
-                pixel_values=input_data["pixel_values"],
-                lidar_values=input_data["lidar_values"],
-                return_dict=True,
+                if labels is not None:
+                    print("Expert ", e)
+                    shifted_logits = logits[:, 1:-1, :].contiguous() # torch.Size([9, 30522])
+                    shifted_labels = labels[:, 1:].contiguous() # torch.Size([9])
+                    
+                    print( "labels = ", [ self.tokenizer.decode(x, skip_special_tokens=True) for x in labels ])
+                    print( "input_ids = ", [ self.tokenizer.decode(x, skip_special_tokens=True) for x in input_ids ])
+                    #print( "shifted_labels = ", shifted_labels)
+                    print( "shifted_labels = ", [ self.tokenizer.decode(x, skip_special_tokens=True) for x in shifted_labels ])
+              
+                    logits_max2 = logits_max[:, 1:-1].contiguous()
+                    #print( "logit_id = ", logits_max2 )
+                    print( "logit_id = ", [ self.tokenizer.decode(x, skip_special_tokens=True) for x in logits_max2 ])
+                    
+                    loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
+        
+                    #loss = loss_fct(shifted_logits.view(-1, vocab_size), shifted_labels.view(-1))
+                    loss = loss_fct(shifted_logits.view(-1, vocab_size), shifted_labels.view(-1))
+                    print("loss expert ", e, " : ", loss)
+                    
+                all_outputs.append(logits)
+            # ---- Mix experts ----
+
+            for i in all_outputs: print( i.shape )
+            for i in all_outputs: print( "loss experts ", loss_fct( i[:, 1:-1, :].contiguous().view(-1, vocab_size) , shifted_labels.view(-1)) )
+            
+            all_outputs = torch.stack(all_outputs, dim=1)
+          
+            gw = gate_weights.unsqueeze(-1).unsqueeze(-1) 
+        
+            sum_logits_weighted = torch.sum(all_outputs * gw, dim=1)
+            print("loss 1", loss_fct( sum_logits_weighted[:, 1:-1, :].contiguous().view(-1, vocab_size) , shifted_labels.view(-1)) ) # = tensor(9.6808, device='cuda:0', grad_fn=<NllLossBackward0>)
+         
+            
+            probs = torch.softmax(all_outputs, dim=-1)  # [B, E, T, V]
+            mixed_probs = torch.sum(probs * gw, dim=1)
+            mixed_logits = torch.log(mixed_probs )
+            loss = loss_fct(mixed_logits[:, 1:-1, :].contiguous().view(-1, vocab_size), shifted_labels.view(-1))
+            print("loss 2", loss ) # = tensor(9.6808, device='cuda:0', grad_fn=<NllLossBackward0>)
+
+
+            batch_losses = []
+            for b in range(batch_size):
+                e = gate_weights[b].argmax().item()
+                logits_b = all_outputs[b, e]  # [T, V]
+                labels_b = shifted_labels[b]
+                loss_b = loss_fct(logits_b[1:-1, :].contiguous().view(-1, vocab_size), labels_b.contiguous().view(-1))
+                batch_losses.append(loss_b)
+            loss3 = torch.stack(batch_losses).mean()
+            print("loss 3", loss3 )  # = tensor(9.6808, device='cuda:0', grad_fn=<MeanBackward0>)
+        
+
+            
+            #supervised_gate_loss = F.cross_entropy(gate_weights, self.expert_labels.to(gate_preds.device))
+            
+            loss_coef = 1e-2
+            #loss_coef2 = 1e-1
+            print("loss LM", loss)
+            print("loss moe", gate_loss) 
+            #print("loss supervised_gate_loss", supervised_gate_loss) 
+            new_loss = loss + loss_coef * gate_loss
+            #new_loss = loss + loss_coef * gate_loss + loss_coef2 *supervised_gate_loss
+
+            print("loss tot", new_loss)
+
+            with open("loss.txt", 'a') as f:
+                f.write(str(new_loss) + " " + str(loss) + " " + str(gate_loss) + "\n")
+                    
+            print(f"Total training steps: {num_training_steps}")
+            print(f"Initial LR: {optimizer.param_groups[0]['lr']}")
+
+            return MoEOutput(
+                loss=new_loss,
+                logits=mixed_logits,
+                gate_weights=gate_weights,
             )
+        
+        def load_tensor(filename,lab) :
+            xx = []
+            for ll in filename :
+                fname = root_path + "/" +  lab + "/" + (os.path.splitext(ll)[0]+'.pt')
+                if os.path.isfile(fname) : 
+                    xx1 = torch.load(fname)
+                    xx.append(xx1)
+                else :
+                    print("TENSOR NOT FOUND")
+                    print(fname)
+                    return None
+            return torch.stack(xx)
 
-            import pdb; pdb.set_trace()
+        def load_tensor_just_one(nn,lab) :
+            xx = []
+            fname = root_path + "/" +  lab + "/" +  (nn+'.pt')
+            if os.path.isfile(fname) : 
+                xx1 = torch.load(fname, map_location='cuda')
+                xx.append(xx1)
+            else :
+                print("TENSOR NOT FOUND")
+                print(fname)
+                return None
+            return torch.stack(xx)
 
-            outputs = self.git(
-            input_ids,
-            attention_mask=attention_mask,
-            position_ids=position_ids,
-            pixel_values=pixel_values,
-            lidar_values=lidar_values,
-            input_mod='frame_id',
-            points=points,
-            head_mask=head_mask,
-            inputs_embeds=inputs_embeds,
-            past_key_values=past_key_values,
-            use_cache=use_cache,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-        )
-
-
-
-
-
-
+        def _make_gate_input(self, lidar_values):
+            # moyen d'opitmiser ici
+            #filename = lidar_values['frame_id']
             
-            
-            sequence_output = out[0]               # [batch, seq_len, hidden_dim]
-            logits = expert.output(sequence_output)  # [batch, seq_len, vocab]
-            all_outputs.append(logits)
+            #input_vec = load_tensor_just_one(filename[0], "256_desc_2025-06-23_11-22-13_run_0_4").to(device).float()
+            input_vec = lidar_values['frame_id_desc'][0][0]
+            return input_vec
 
-            import pdb; pdb.set_trace()
-
-
-            
-            #  shifted_logits = logits[:1].view(-1, vocab_size)
-            #  loss = loss_fct( shifted_logits, labels.view(-1) )
-
-            
-            loss = None
-            if labels is not None:
-                shifted_logits = logits[:-1].contiguous()     # [seq_len-1, batch, vocab]
-                shifted_labels = labels[1:].contiguous()      # [seq_len-1, batch]
-                #loss = loss_fct( shifted_logits.view(-1, vocab_size), shifted_labels.view(-1) )
-                
-                #loss = loss_fct( shifted_logits.view(-1, vocab_size), shifted_labels.view(-1) )
-
-                shifted_logits = logits[:1].view(-1, vocab_size)
-                loss = loss_fct( shifted_logits, labels.view(-1) )
-
-            
-                # dans modeling git
-                
-                """
-                shifted_logits.view(-1, self.config.vocab_size)
-                tensor([[-0.9376, -0.4855,  0.4339,  ...,  0.6635,  0.1074,  0.1868],
-                        [-0.0569,  0.0706, -0.6680,  ..., -0.1845, -0.3158, -0.9818],
-                        [-0.4564,  0.4943, -0.4055,  ...,  0.9632,  0.6090, -0.0870],...
-                """
-                
-                # shifted_logits.view(-1, self.config.vocab_size).shape torch.Size([576, 30522])
-                # labels.view(-1).shape torch.Size([576])
-
-                """
-                labels
-                tensor([[169, 811, 371,   3,   0,   0,   0,   0,   0],
-                        [223, 121, 255, 113,   3,   0,   0,   0,   0],
-                        [492, 204, 256,   3,   0,   0,   0,   0,   0],
-                        [164, 558, 128,   3,   0,   0,   0,   0,   0],
-                        [309, 149, 288,   3,   0,   0,   0,   0,   0],
-                        [433, 214, 155,   3,   0,   0,   0,   0,   0],
-                        [354, 117, 556, 117,   3,   0,   0,   0,   0],
-                        [386, 189, 380,   3,   0,   0,   0,   0,   0],
-                        [146, 194, 210, 140,   3,   0,   0,   0,   0],
-                        [354, 170, 288,   3,   0,   0,   0,   0,   0],
-                        [275, 132, 250,   3,   0,   0,   0,   0,   0],
-                        [433, 614, 113,   3,   0,   0,   0,   0,   0],...
-                """
-                #loss_lm = (loss_fct(shifted_logits.view(-1, self.config.vocab_size), labels.view(-1)) )
-
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            print("loss ", loss)
+        def generate_top1_V2(self, x=None, pixel_values=None, lidar_values=None, **kwargs):
+            if x is None:
+                x = self._make_gate_input(lidar_values)
         
-        print(f"Epoch {epoch} - Loss {loss.item():.4f}")
-
-
-    import pdb; pdb.set_trace()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-    import pdb; pdb.set_trace()
-
-    # training (add a epoch strategy ? )
-    for query_idx in range(len(train_subset)):
-        # Example forward pass
-        # input_vec = torch.randn(1, 256).to(device)  # your 256-dim vector
-        import pdb; pdb.set_trace()
-        query_idx = 0
-        input_data = data_collator(torch.utils.data.Subset(train_subset, range(query_idx, query_idx+1))) 
+            _, _, _, CUSTOM_GATE = self.gate(x)
+            active = torch.argmax(CUSTOM_GATE[0]).item()
+            expert = self.experts[active]
         
-        lidar_values = input_data['lidar_values']
+            out = expert.generate(
+                pixel_values=lidar_values['pixel_values'],
+                lidar_values=lidar_values,
+                points=None,
+                max_length=ID_MAX_LENGTH,
+                num_beams=10,
+                num_return_sequences=10,
+                pad_token_id=0,
+                bos_token_id=2,
+                eos_token_id=3,
+                renormalize_logits=False,
+                early_stopping=False,
+                prefix_allowed_tokens_fn=restrict_decode_vocab_v3,
+                return_dict_in_generate=True,
+                output_scores=True,
+            )
         
-        filename = lidar_values['frame_id']
-        
-        input_vec = load_tensor(filename.flatten(),"256_desc_2025-06-23_11-22-13_run_0_4").to(device).float()
+            return {
+                "sequences": out.sequences,              # ✅ correct beams
+                "scores": out.scores,
+                "gate_weights": CUSTOM_GATE,
+                "sequences_scores": out.sequences_scores # ✅ correct ranking
+            }
 
-        mixed_output, gate_weights = moe_model(input_vec, input_data)
-        
-        print("Mixture logits:", mixed_output.shape)  # [seq_len, beams*batch, vocab]
-        print("Gate weights:", gate_weights)          # distribution over experts
-    
-    
-    import pdb; pdb.set_trace()
-
-
-        
-    ################################################################################################################################################
-    # Mixture-of-Experts Setup
-    ################################################################################################################################################
-
-
-    
-    """
     #############################################################################
-    ### === Training / Evaluation ===
-    ##############################################################################
+    # moe_model
+    #############################################################################
+    
+    moe_model = MoE_DSI(input_dim=256, experts=transformer_list, tokenizer=tokenizer, expert_labels=expert_labels).to(device)
 
-    if do_train:
-        
-        train_indices = []  # Indices for the training set
-        val_indices = []    # Indices for the validation set
-        
-        for query_idx in range(train_len): 
-            if query_idx % 5 != 0:  # 80% of the data
-                train_indices.append(query_idx)
-            elif query_idx % 10 != 0:  # 10% for validation
-                val_indices.append(query_idx)
-            #else:  # Remaining 10% for evaluation
-                #eval_indices.append(query_idx)
-
-        # Preload required data for compute metrics only one time 
-        def load_json(filepath):
-            with open(filepath, "r") as f:
-                return json.load(f)
-        
-        label_mapping = {}
-        if args.local_rank == 0 :
-            print("train_set.labeltype ",train_set.labeltype)
-        if train_set.labeltype in {"gps", "hierarchical", "hilbert"}:
-            label_mapping = load_json(sequence_path + f"/{train_set.labeltype}.json")
-        positions_database = train_set.positions_database # no need to shift --> use to compute metrics
-        
-        
-        train_subset = torch.utils.data.Subset(train_set, train_indices)
-        if args.local_rank == 0 :
-            print("train_indices ", len(train_indices))
-        del train_set, train_indices
-        val_subset = torch.utils.data.Subset(eval_set, val_indices)
-        if args.local_rank == 0 :
-            print("val_indices ", len(val_indices))
-        del eval_set, val_indices
-        gc.collect()  
-        
-        # shuffling
-        indices = torch.randperm(len(train_subset))
-        train_subset_shuffled = torch.utils.data.Subset(train_subset, indices)
-       
-        if args.local_rank == 0 :
-            print("train_subset_shuffled ", len(train_subset))
-            print("train_subset_shuffled ", train_subset_shuffled[0]['frame_id'], train_subset_shuffled[1]['frame_id'], train_subset_shuffled[2]['frame_id'])
-            print("val_subset ", len(val_subset))
-            print("val_subset ", val_subset[0]['frame_id'], val_subset[1]['frame_id'], val_subset[2]['frame_id'])
-            
-
-        previous_model_path = args.resume_from_checkpoint
+    moe_model.eval()
+    optimizer = torch.optim.Adam(moe_model.gate.parameters(), lr=1e-1)
 
 
-        new_train_batch_size = ori_train_batch_size
-        new_eval_batch_size = ori_eval_batch_size
-        if args.local_rank == 0 :
-            print("new_train_batch_size ", new_train_batch_size)
-            print("new_eval_batch_size ", new_eval_batch_size)
-        new_training_args = replace(training_args, 
-                                    per_device_train_batch_size=new_train_batch_size,
-                                    per_device_eval_batch_size=new_eval_batch_size)
+    #num_training_steps = len(train_subset_shuffled) // new_train_batch_size * new_training_args.num_train_epochs
+    num_training_steps = 1000
+    
 
-        save_file_name = args.save_hit_file # new for naming file hit score
+    for name, p in moe_model.named_parameters():
+        if p.requires_grad:
+            print("moe_model.named_parameters requiring grad ", name)
 
-        if args.local_rank == 0 :
-            logger.info("  ")
-            logger.info(" ======= START TRAINING ========= ")
-            logger.info("train_set_len:" + str(len(train_subset)))
-            
-        trainer = DSITrainer(
-                model=model_dsi,
-                tokenizer=tokenizer,
-                args=new_training_args,
-                train_dataset=train_subset,
-                eval_dataset=val_subset,
-                data_collator=data_collator,
-                compute_metrics=make_compute_metrics(tokenizer, logger, args.local_rank, positions_database, label_mapping, save_file_name),
-                restrict_decode_vocab=restrict_decode_vocab_v3,
-                LIK=LIK,
-                id_max_length=ID_MAX_LENGTH
-            ) 
+    logger.info("============== FULL NETWORK STATE =================")
+    for name, param in moe_model.named_parameters() : logger.info(name + "\t =>" + str(param.requires_grad)) 
+    logger.info("============== FREE NETWORK STATE =================")
 
-        is_trained = False
-        if not os.path.isdir(previous_model_path) :
-            if args.local_rank == 0 :
-                print("train from scratch : ",previous_model_path)
-            trainer.train()
-            is_trained = True
-        else :
-            if args.local_rank == 0 :
-                print("resume_from_checkpoint : " + previous_model_path)
-            trainer.train(resume_from_checkpoint=previous_model_path)
-            is_trained = True
-        
-        if is_trained :
-            trainer.save_model(cur_model_path)
-            trainer.state.save_to_json(os.path.join(cur_model_path, "trainer_state.json")) 
+    ### ====== Print active layers git =========
+    Print_active_layers_git(args, logger, moe_model, model_name)  
+    logger.info("============== NETWORK STATE =================")
+    #############################################################################
 
     if do_eval  : 
+
+        all_eval_indices = load_set_ids("id_dsi_eval_list.json", sequence_path)
+        print(len(all_eval_indices))
+
+        
+        eval_indices = all_eval_indices
+        eval_subset = torch.utils.data.Subset(eval_set, eval_indices)
+        print("len(eval_subset) ", len(eval_subset))
+
         del train_set
+        gc.collect()  # Force garbage collection
+
         if args.local_rank == 0 :
             print("start eval")
-        eval_log3dnet(model_dsi, eval_subset, eval_set, eval_loader, data_collator, tokenizer, cfg, checkpoint_dir, checkp_to_eval, prefix_dict)
+        eval_log3dnet(moe_model, eval_subset, eval_set, eval_indices, eval_loader, data_collator, tokenizer, cfg, checkpoint_dir, checkp_to_eval, prefix_dict, LIK, ID_MAX_LENGTH)
 
-    """
+
+
+
+
 
 if __name__ == '__main__':
     main()

@@ -1,19 +1,15 @@
 #####################################################################################
 #####################################################################################
 #####################################################################################
-
+import os
+import torch
+import random
+import json
 import numpy as np
 from ..dataset import DatasetTemplate
 from ..dsi_datasets import DSIDatasets
-import glob
-import os
 from PIL import Image
-import pathlib
-import torch
-import fnmatch
-import random
-import re
-import json
+
 
 #####################################################################################
 # opti
@@ -98,7 +94,6 @@ class LHD_dataset(DatasetTemplate,DSIDatasets):
         f.close()
         
         # print("before load ", str(self.root_path) + '/bin/*.bin')
-        #fnames = glob.glob(str(self.root_path) + '/bin/*.bin')
         #inames = sorted(os.path.split(fname)[-1][:-4] for fname in fnames)
         inames = sorted(fnames)
 
@@ -264,6 +259,9 @@ class LHD_dataset(DatasetTemplate,DSIDatasets):
         path_split = str(lidar_path).split('/')
     
         input_dict = {'frame_id': path_split[0][:-4]}
+        
+        
+        import pdb; pdb.set_trace()
         input_dict['frame_id_desc'] = self.load_tensor_just_one(input_dict['frame_id'],"256_desc_2025-06-23_11-22-13_run_0_4").unsqueeze(1).to(dtype=torch.float32)
 
         ### Contrastive
