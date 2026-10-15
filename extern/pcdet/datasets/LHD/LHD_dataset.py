@@ -260,9 +260,7 @@ class LHD_dataset(DatasetTemplate,DSIDatasets):
     
         input_dict = {'frame_id': path_split[0][:-4]}
         
-        
-        import pdb; pdb.set_trace()
-        input_dict['frame_id_desc'] = self.load_tensor_just_one(input_dict['frame_id'],"256_desc_2025-06-23_11-22-13_run_0_4").unsqueeze(1).to(dtype=torch.float32)
+        input_dict['frame_id_desc'] = self.load_tensor_just_one(input_dict['frame_id'],"descriptor").unsqueeze(1).to(dtype=torch.float32)
 
         ### Contrastive
         #main_id = self.get_id(index)
@@ -305,8 +303,8 @@ class LHD_dataset(DatasetTemplate,DSIDatasets):
 
         ### Load LiDAR Data (if required)
         if "points" in get_item_list:
-            input_dict['points'] = self.get_lidar(lidar_path)
-
+            #input_dict['points'] = self.get_lidar(lidar_path)
+            input_dict['points'] = 0
             input_dict.update(self.get_dict_dsi(index))  # Merge dictionaries
 
             # Extract LiDAR values for `lidar_values`
@@ -338,11 +336,11 @@ class LHD_dataset(DatasetTemplate,DSIDatasets):
                     'id_pcd_negatif':  str(sel_negative_ids).split('/')[-1][:-6],
                     'other_id_pcd_negatif': str(other_neg_id).split('/')[-1][:-4]
                 })
-                
+                """
                 input_dict['id_pcd_positif_desc'] = self.load_tensor_just_one(input_dict['id_pcd_positif'],"256_desc_2025-06-23_11-22-13_run_0_4").unsqueeze(1).to(dtype=torch.float32)
                 input_dict['id_pcd_negatif_desc'] = self.load_tensor_just_one(input_dict['id_pcd_negatif'],"256_desc_2025-06-23_11-22-13_run_0_4").unsqueeze(1).to(dtype=torch.float32)
                 input_dict['other_id_pcd_negatif_desc'] = self.load_tensor_just_one(input_dict['other_id_pcd_negatif'],"256_desc_2025-06-23_11-22-13_run_0_4").unsqueeze(1).to(dtype=torch.float32)
-
+                """
  
                 
         # Prepare final data dictionary

@@ -665,7 +665,7 @@ def main():
         
     ### ========= build Models ===========
     work_path = os.getenv('WORKSF')
-    
+    work_path = "/mnt/c/Users/chahi/Desktop/these/code/these/code/DSI_LIDAR_HD/"
     model_paths = {
         "git_base": os.path.join(work_path, "datas/transformers/git-base-lhd"),
         "git_large": os.path.join(work_path, "datas/transformers/git-large-coco"),
@@ -795,15 +795,23 @@ def main():
     LIK = [tokenizer(ii, padding="max_length", max_length=ID_MAX_LENGTH).input_ids for ii in lid]
     prefix_dict = build_prefix_dict_filter(LIK) # bien pour toutes les zones
 
+
+    print("Number of labels:", len(lid))
+    print("Number of tokenized labels:", len(LIK))
+    print("First label:", lid[0] if lid else None)
+    print("First tokenized label:", LIK[0] if LIK else None)
+    print("Prefix dictionary size:", len(prefix_dict))
+    import pdb; pdb.set_trace() 
+
     # Optimized restrict_decode_vocab
     def restrict_decode_vocab_v3(batch_idx, prefix_beam):
         pfb = tuple(prefix_beam.cpu().numpy())  
         return prefix_dict.get(pfb, [102])
     
     #update object
-    train_set.tokenizer = tokenizer
-    train_set.image_processor = processor
-    train_set.ID_MAX_LENGTH = ID_MAX_LENGTH
+    #train_set.tokenizer = tokenizer
+    #train_set.image_processor = processor
+    #train_set.ID_MAX_LENGTH = ID_MAX_LENGTH
         
     eval_set.tokenizer = tokenizer
     eval_set.image_processor = processor
@@ -828,7 +836,9 @@ def main():
 
     ### ====== checkpoint =========
     work_path = os.getenv('WORK')
-    CHECK_ROOT= work_path + "/checkpoints/"
+    #import pdb; pdb.set_trace()
+    #CHECK_ROOT= work_path + "/checkpoints/"
+    CHECK_ROOT= "/mnt/c/Users/chahi/Desktop/these/code/temp/checkpoints/"
     checkpoint_dir = CHECK_ROOT + "/" + model_name + "_" + eval_set.labeltype + "_" + args.extra_tag
 
     if not os.path.isdir(checkpoint_dir) :
@@ -992,10 +1002,10 @@ def main():
 
         
 
-    checkpoint_paths = ["../checkpoints/git_hilbert_new_tokenizer_A0/checkpoint-6300/pytorch_model.bin",
-                        "../checkpoints/git_hilbert_train_B0/checkpoint-7200/pytorch_model.bin",
-                        "../checkpoints/git_hilbert_train_C02/checkpoint-7000/pytorch_model.bin",
-                        "../checkpoints/git_hilbert_train_DO2/checkpoint-1400/pytorch_model.bin"
+    checkpoint_paths = ["/mnt/c/Users/chahi/Desktop/these/code/temp/checkpoints/git_hilbert_A0/checkpoint-6300/pytorch_model.bin",
+                        "/mnt/c/Users/chahi/Desktop/these/code/temp/checkpoints/git_hilbert_B0/checkpoint-7200/pytorch_model.bin",
+                        "/mnt/c/Users/chahi/Desktop/these/code/temp/checkpoints/git_hilbert_C0/checkpoint-7000/pytorch_model.bin",
+                        "/mnt/c/Users/chahi/Desktop/these/code/temp/checkpoints/git_hilbert_D0/checkpoint-1400/pytorch_model.bin"
                        ]
 
     transformer_list = []
@@ -1083,7 +1093,9 @@ def main():
             self.w_gating = nn.Parameter(torch.randn(*outer_expert_dims, dim, num_gates))
             
             self.gate = ExpertClassifier(input_dim=256, num_experts=4)
-            self.gate.load_state_dict(torch.load("gate_EST.pth"))
+            gate_path = "gate_EST.pth"
+            gate_path = "/mnt/c/Users/chahi/Desktop/these/code/temp/data/Gate/gate_EAST.pth"
+            self.gate.load_state_dict(torch.load(gate_path))
             self.gate.to(next(self.parameters()).device)
             self.gate.eval()
             
@@ -1424,22 +1436,23 @@ def main():
     if do_eval  : 
 
         all_eval_indices = load_set_ids("id_dsi_eval_list.json", sequence_path)
+        all_eval_indices = all_eval_indices[:10]
         print(len(all_eval_indices))
 
         
         eval_indices = all_eval_indices
         eval_subset = torch.utils.data.Subset(eval_set, eval_indices)
+        all_eval_indices = [5281]
+        print("len(eval_set) ", len(eval_set))
         print("len(eval_subset) ", len(eval_subset))
-
-        del train_set
-        gc.collect()  # Force garbage collection
+        print("len(eval_indices) ", len(eval_indices))
+        print("len(eval_subset[0]) ", len(eval_subset[0]))
+        
 
         if args.local_rank == 0 :
             print("start eval")
+        
         eval_log3dnet(moe_model, eval_subset, eval_set, eval_indices, eval_loader, data_collator, tokenizer, cfg, checkpoint_dir, checkp_to_eval, prefix_dict, LIK, ID_MAX_LENGTH)
-
-
-
 
 
 

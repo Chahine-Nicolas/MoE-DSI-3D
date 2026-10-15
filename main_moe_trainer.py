@@ -1924,6 +1924,7 @@ def main():
         """
 
         all_eval_indices = load_set_ids("id_dsi_eval_list.json", sequence_path)
+        
         print(len(all_eval_indices))
 
         

@@ -1,19 +1,16 @@
-from scipy.spatial.distance import cdist
 import os
 import sys
-import glob
-import random
-import numpy as np
 import logging
 import json
 import torch
 import math
-#from pathlib import Path
+import time
+import numpy as np
 import matplotlib.pyplot as plt
+
 #####################################################################################
 # Load poses
 # ####################################################################################
-import time
 
 ch = logging.StreamHandler(sys.stdout)
 logging.getLogger().setLevel(logging.INFO)
@@ -213,8 +210,7 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
                 continue
                 
             seen_ids.append('%06d' % query_idx) # 0 à 880
-            db_seen_ids = np.copy(seen_ids)
-        
+            
             if eval_set.labeltype == 'gps' :
                 print(query_idx, eval_set.label2gps(query_idx))
             elif eval_set.labeltype == 'hilbert' :
@@ -223,24 +219,26 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
     elif cfg['DATA_CONFIG']['DATASET'] == "LHD_dataset" : 
         counter_id = 0
 
-    
 
     def restrict_decode_vocab_v3(batch_idx, prefix_beam):
         pfb = tuple(prefix_beam.cpu().numpy())  # Convert tensor to tuple
-        return prefix_dict.get(pfb, [102])
-        
+        #return prefix_dict.get(pfb, [102])
+        return prefix_dict.get(pfb, [3])
 
     ######################################################################################
     save_results = False
     if save_results:
         save_name = 'output_00.txt'
         open(save_name, 'w').close()
-    ######################################################################################
-
+    ###################################################################################### 
     
+    
+    
+    # for i in eval_subset: pinrt(i)
     len_eval = 0
     query_idx = -1
     for i in eval_subset:
+        print(">>> ENTERED LOOP", flush=True)
         query_idx += 1
         query_path = i['id']
         query_pose = positions_database[query_path]
@@ -248,8 +246,8 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
         len_eval += 1
         if cfg['DATA_CONFIG']['DATASET'] == "LHD_dataset" :
             is_revisit = 1 # LHD data are always revisited
-        else:
-            is_revisit = is_revisit_list[key]
+ 
+        
         
         # Find top-1 candidate.
         nearest_idx = 0
@@ -298,9 +296,11 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
             res = _pad_tensors_to_max_len(input_data['labels'], ID_MAX_LENGTH,tokenizer)
             vv = tokenizer.batch_decode(input_data["labels"],skip_special_tokens=True)
             ids = input_data['ids']
+            
             label_ids = tokenizer.batch_decode(batch_beams, skip_special_tokens=True)
             
             print("label_ids ", label_ids)
+            
             p_dist_mean = 0
             p_dist_beam = 0
     
@@ -381,7 +381,7 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
         ######################################################################################
         # Hitsscores only revisited (OG)
         ######################################################################################
-    
+       
         if is_revisit:     
             num_revisits += 1
             if p_dist <= revisit_criteria:
@@ -564,7 +564,14 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
         logging.info(f'{label}')
         logging.info(f'num_revisits: {num_revisits}')
         logging.info(f'num_correct_loc: {num_correct_loc}')
-        logging.info(f'percentage_correct_loc: {num_correct_loc * 100.0 / num_revisits:.2f}%')
+        
+        if num_revisits > 0:
+            logging.info(f'percentage_correct_loc: {num_correct_loc * 100.0 / num_revisits:.2f}%')
+        else:
+            logging.warning(
+                "percentage_correct_loc: undefined (num_revisits = 0)"
+            )
+    
     
         logging.info(f'num_eval_set: {len_eval}')
         logging.info(f'num_correct_loc_all: {num_correct_loc_all}')
@@ -733,6 +740,4 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
             else:
                 print("No data available")
 
-    
-    import pdb; pdb.set_trace() 
     return F1max                    
