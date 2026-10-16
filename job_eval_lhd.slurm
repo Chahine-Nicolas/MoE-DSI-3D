@@ -135,7 +135,7 @@ export 'PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512'
 # fi
 
 
-python main_80_20.py \
+python main_train_DSI.py \
        --launcher none \
        --cfg_file ${CONFIG_NAME} \
        --save_hit_file hit_scores.txt \
