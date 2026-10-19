@@ -4,7 +4,6 @@ import argparse
 import datetime
 import copy 
 import math
-import gc
 import json
 
 import torch
@@ -14,7 +13,6 @@ import numpy as np
 
 from pathlib import Path
 from extern.log3dnet.SOP import SOP
-from dataclasses import replace 
 
 from extern.pcdet.config import cfg, cfg_from_yaml_file, log_config_to_file
 from extern.pcdet.datasets import build_dataloader
@@ -558,8 +556,8 @@ def main():
     do_dump_dict_gt = eval(args.do_dump_dict_gt)
 
     print("============================================")
+    print("do_train:"  + str(do_train))
     print("do_eval:"  + str(do_eval))
-    print("do_train:"  + str(do_eval))
     print("do_eval_partial:"  + str(do_eval_partial))
     print("do_preprocess: "  + str(do_preprocess))
     print("do_dump_dict_gt: "  + str(do_dump_dict_gt))
@@ -588,8 +586,6 @@ def main():
     print("training_args.warmup_ratio:", training_args.warmup_ratio)
 
     batch_size = training_args.per_device_train_batch_size
-    ori_train_batch_size  = training_args.per_device_train_batch_size
-    ori_eval_batch_size  = training_args.per_device_eval_batch_size
     args.batch_size = batch_size
 
     
@@ -664,8 +660,7 @@ def main():
     print_loader(eval_subset, 'eval')
         
     ### ========= build Models ===========
-    work_path = os.getenv('WORKSF')
-    work_path = "/mnt/c/Users/chahi/Desktop/these/code/these/code/DSI_LIDAR_HD/"
+    work_path = "/work_path/"
     model_paths = {
         "git_base": os.path.join(work_path, "datas/transformers/git-base-lhd"),
         "git_large": os.path.join(work_path, "datas/transformers/git-large-coco"),
@@ -801,7 +796,7 @@ def main():
     print("First label:", lid[0] if lid else None)
     print("First tokenized label:", LIK[0] if LIK else None)
     print("Prefix dictionary size:", len(prefix_dict))
-    import pdb; pdb.set_trace() 
+
 
     # Optimized restrict_decode_vocab
     def restrict_decode_vocab_v3(batch_idx, prefix_beam):
@@ -835,10 +830,9 @@ def main():
     logger.info("============== NETWORK STATE =================")
 
     ### ====== checkpoint =========
-    work_path = os.getenv('WORK')
     #import pdb; pdb.set_trace()
     #CHECK_ROOT= work_path + "/checkpoints/"
-    CHECK_ROOT= "/mnt/c/Users/chahi/Desktop/these/code/temp/checkpoints/"
+    CHECK_ROOT= "../checkpoints/"
     checkpoint_dir = CHECK_ROOT + "/" + model_name + "_" + eval_set.labeltype + "_" + args.extra_tag
 
     if not os.path.isdir(checkpoint_dir) :
@@ -849,17 +843,16 @@ def main():
     # Load experts training dataset
     ################################################################################################################################################
 
-
-    
     train_indices_path = "id_zone_A_dsi_train_list.json"
     val_indices_path = "id_zone_A_dsi_val_list.json"
 
     print("train_indices_path ", train_indices_path)
     print("val_indices_path ", val_indices_path)
+    """
     f = open(sequence_path +"/"+ train_indices_path) 
     train_indices = json.load(f)
     f.close()
-
+    """
     
     def load_set_ids(train_indices_path, sequence_path):
         print("train_indices_path ", train_indices_path)
@@ -1002,10 +995,10 @@ def main():
 
         
 
-    checkpoint_paths = ["/mnt/c/Users/chahi/Desktop/these/code/temp/checkpoints/git_hilbert_A0/checkpoint-6300/pytorch_model.bin",
-                        "/mnt/c/Users/chahi/Desktop/these/code/temp/checkpoints/git_hilbert_B0/checkpoint-7200/pytorch_model.bin",
-                        "/mnt/c/Users/chahi/Desktop/these/code/temp/checkpoints/git_hilbert_C0/checkpoint-7000/pytorch_model.bin",
-                        "/mnt/c/Users/chahi/Desktop/these/code/temp/checkpoints/git_hilbert_D0/checkpoint-1400/pytorch_model.bin"
+    checkpoint_paths = ["../checkpoints/git_hilbert_A0/checkpoint-6300/pytorch_model.bin",
+                        "../checkpoints/git_hilbert_B0/checkpoint-7200/pytorch_model.bin",
+                        "../checkpoints/git_hilbert_C0/checkpoint-7000/pytorch_model.bin",
+                        "../checkpoints/git_hilbert_D0/checkpoint-1400/pytorch_model.bin"
                        ]
 
     transformer_list = []
@@ -1093,8 +1086,7 @@ def main():
             self.w_gating = nn.Parameter(torch.randn(*outer_expert_dims, dim, num_gates))
             
             self.gate = ExpertClassifier(input_dim=256, num_experts=4)
-            gate_path = "gate_EST.pth"
-            gate_path = "/mnt/c/Users/chahi/Desktop/these/code/temp/data/Gate/gate_EAST.pth"
+            gate_path = "../Gate/gate_EAST.pth"
             self.gate.load_state_dict(torch.load(gate_path))
             self.gate.to(next(self.parameters()).device)
             self.gate.eval()

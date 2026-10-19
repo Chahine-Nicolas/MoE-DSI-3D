@@ -49,7 +49,7 @@ class LHD_dataset(DatasetTemplate,DSIDatasets):
         self.files = self._load_files()
 
         # Load poses
-        with open(self.root_path / 'poses_grid2.json') as f:
+        with open(self.root_path / 'poses_grid3.json') as f:
             poses = json.load(f)
         self.positions_database = poses
 
@@ -89,7 +89,7 @@ class LHD_dataset(DatasetTemplate,DSIDatasets):
         Loads file information for queries, positives, and negatives.
         """
         
-        f = open(str(self.root_path) + "/full_list.json") 
+        f = open(str(self.root_path) + "/base_full_list.json") 
         fnames = json.load(f)
         f.close()
         
@@ -144,7 +144,7 @@ class LHD_dataset(DatasetTemplate,DSIDatasets):
             key=lambda s: int(re.search(r'\d+', s).group())
         )
         """
-        f = open(str(self.root_path) + "/full_list.json") 
+        f = open(str(self.root_path) + "/base_full_list.json") 
         self.kitti_infos  = json.load(f)
         f.close()
 
@@ -279,7 +279,7 @@ class LHD_dataset(DatasetTemplate,DSIDatasets):
         # Get another distinct negative sample
 
         # if all dataset
-        f = open(str(self.root_path) + "/full_list.json") 
+        f = open(str(self.root_path) + "/base_full_list.json") 
         fnames = json.load(f)
         f.close()
         inames = sorted(fnames)

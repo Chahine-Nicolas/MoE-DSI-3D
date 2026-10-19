@@ -19,19 +19,6 @@ logging.basicConfig(format='%(asctime)s %(message)s',
                     handlers=[ch])
 logging.basicConfig(level=logging.INFO, format="")
 
-def _pad_tensors_to_max_len( tensor, max_length,tokenizer):
-    # If PAD token is not defined at least EOS token has to be defined
-    pad_token_id = (
-        tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id
-    )
-    tensor[tensor == -100] = tokenizer.pad_token_id
-    padded_tensor = pad_token_id * torch.ones(
-        (tensor.shape[0], max_length), dtype=tensor.dtype, device=tensor.device
-    )
-    padded_tensor[:, : tensor.shape[-1]] = tensor
-    return padded_tensor
-
-
 def transfrom_cam2velo(Tcam):
     R = np.array([7.533745e-03, -9.999714e-01, -6.166020e-04, 1.480249e-02, 7.280733e-04,
                   -9.998902e-01, 9.998621e-01, 7.523790e-03, 1.480755e-02
@@ -107,37 +94,11 @@ class Timer(object):
 def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_collator, tokenizer, cfg, checkpoint_dir, checkp_to_eval, prefix_dict, LIK, ID_MAX_LENGTH=10):
     print("eval lognet")
 
-
     save_descriptors = False
-    save_counts = False
     plot_pr_curve = True
-    
     eval_seq=cfg['DATA_CONFIG']['SEQ']
-    if 'Kitti' in cfg['DATA_CONFIG']['DATASET']:
-        log3dnet_dir=os.getenv('LOG3DNET_DIR')
-        revisit_criteria=3
-        not_revisit_criteria=20
-        skip_time=30
-        revisit_json_file = 'is_revisit_D-{}_T-{}_v2.json'.format(
-            int(revisit_criteria), int(skip_time))
-        cd_thresh_min=0.001
-        cd_thresh_max=5 # au lieu de 1
-        num_thresholds=5000
-        num_beams = 10
-        ## ==== Kitti =====
-        print("kitti dataset")
-        kitti_dir= os.getenv('WORKSF') + '/datas/datasets/'
-        sequence_path = kitti_dir + 'sequences/' + eval_seq + '/'
-        _, positions_database = load_poses_from_txt(sequence_path + 'poses.txt')
     
-        min_bbox = np.min(positions_database,0) 
-        positions_database = positions_database - min_bbox
-        
-        revisit_json_dir = os.path.join(os.path.dirname(__file__), '/config/kitti_tuples/')
-        revisit_json = json.load(open(log3dnet_dir + revisit_json_dir + revisit_json_file, "r"))
-        is_revisit_list = revisit_json[eval_seq]
-
-    elif cfg['DATA_CONFIG']['DATASET'] == "LHD_dataset" :
+    if cfg['DATA_CONFIG']['DATASET'] == "LHD_dataset" :
         revisit_criteria=1
         not_revisit_criteria=60
         
@@ -147,24 +108,17 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
         num_beams = 10
         
         sequence_path = cfg['DATA_CONFIG']['DATA_PATH'] + "/"
-        with open(sequence_path + "poses_grid2.json") as f: 
+        with open(sequence_path + "poses_grid3.json") as f: 
             positions_database = json.load(f)
-
-
-    
-    
-    # import pdb; pdb.set_trace()        
-    ## ==== Kitti =====
 
     thresholds = np.linspace(
         cd_thresh_min, cd_thresh_max, int(num_thresholds))
-
     
 
     num_thresholds = len(thresholds)
 
     # Databases of previously visited/'seen' places.
-    seen_poses, seen_ids, seen_descriptors, seen_feats = [], [], [], []
+    seen_poses, seen_ids = [], []
 
     # Store results of evaluation.
     num_true_positive = np.zeros(num_thresholds)
@@ -215,15 +169,94 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
                 print(query_idx, eval_set.label2gps(query_idx))
             elif eval_set.labeltype == 'hilbert' :
                 print(query_idx, eval_set.label2hilbert(query_idx))
-                
-    elif cfg['DATA_CONFIG']['DATASET'] == "LHD_dataset" : 
-        counter_id = 0
-
-
+    
     def restrict_decode_vocab_v3(batch_idx, prefix_beam):
         pfb = tuple(prefix_beam.cpu().numpy())  # Convert tensor to tuple
         #return prefix_dict.get(pfb, [102])
         return prefix_dict.get(pfb, [3])
+
+
+    def compute_distances(query_pose, place_candidates):
+        """Compute distances and return distance lists."""
+        p_dists = np.linalg.norm(query_pose - np.array(place_candidates), axis=1)
+        hits_clos = ['0' if x > 3 else '1' for x in p_dists]
+        return p_dists, hits_clos
+
+    def load_json(filepath):
+        with open(filepath, "r") as f:
+            return json.load(f)
+
+    def log_query_info(labeltype, query_idx, nearest_idx, nearest_ids, label_ids, is_revisit, is_correct_loc, p_dist, min_dist, eval_set):
+        """Logs query information based on labeltype."""
+        labeltype_mapping = {
+            #'hierarchical': ('id', eval_set.hierarchical_label.get(str(query_idx), 'N/A')),
+            #'gps': ('id', eval_set.label2gps(str(query_idx))) ,
+            'hilbert': ('id', eval_set.label2hilbert(str(eval_subset[query_idx]['id'])))
+        }
+    
+        if labeltype in labeltype_mapping:
+            label_name, query_label = labeltype_mapping[labeltype]
+            logging.info(
+                f"{label_name}:{os.path.basename(str(eval_subset[query_idx]['id']))} {label_name}_val:{query_label} Top1_{labeltype}:{label_ids[0]} "
+                f"Top1_id:{nearest_idx} is_rev:{is_revisit} -- loc_ok_1:{is_correct_loc} "
+                f"p_dist:{p_dist:6.2f} min_dist:{min_dist:6.2f} "
+            )
+            
+            #logging.info(f"{label_name}:{os.path.basename(str(eval_subset[query_idx]['id']))} {label_name}_val:{query_label} TopN_{labeltype}:{label_ids} TopN_id:{nearest_ids} ")
+        else:
+            logging.info(
+                f"id:{os.path.basename(str(eval_subset[query_idx]['id']))} n_id:{nearest_idx} is_rev:{is_revisit} -- loc_ok_1:{is_correct_loc} "
+                f"p_dist:{p_dist:6.2f} min_dist:{min_dist:6.2f} "
+            )
+
+
+        ######################################################################################
+        if save_results:
+            with open(save_name, 'a') as f:
+                f.write(json.dumps({
+                    "query_idx": int(query_idx),
+                    f"TopN_{labeltype}:": label_ids,
+                    "TopN_id": nearest_ids,
+                    "dist": p_dists.tolist(),     # convert to native float
+                    #"score": (-seq_score).cpu().numpy().tolist()[0]  # convert to native float
+                }) + '\n')
+        ######################################################################################
+        return
+
+    """
+    def Evaluate_top_1_candidate(num_thresholds, thresholds, min_dist, p_dist, revisit_criteria, not_revisit_criteria, is_revisit, num_true_positive, num_false_positive, num_true_negative, num_false_negative):
+        for thres_idx in range(num_thresholds):
+            threshold = thresholds[thres_idx]
+            
+            if(min_dist < threshold):  # Positive Prediction
+                if p_dist <= revisit_criteria :
+                    num_true_positive[thres_idx] += 1
+                elif p_dist > not_revisit_criteria:
+                    num_false_positive[thres_idx] += 1
+    
+                    
+            else:  # Negative Prediction
+                if p_dist > revisit_criteria :
+                    num_true_negative[thres_idx] += 1
+                elif p_dist <= not_revisit_criteria:
+                    num_false_negative[thres_idx] += 1
+        
+        
+        return num_true_positive, num_false_positive, num_true_negative, num_false_negative 
+    """
+
+    def compute_statistics(dict_to, key, round_num):
+        """
+        Compute and return statistics (mean, min, max, std) for a given key in the dictionary list.
+        """
+        values = [d[key] for d in dict_to]
+        stats = {
+            "mean": round(np.mean(values), round_num),
+            "min": round(min(values), round_num),
+            "max": round(max(values), round_num),
+            "std": round(np.std(values), round_num),
+        }
+        return stats
 
     ######################################################################################
     save_results = False
@@ -232,13 +265,9 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
         open(save_name, 'w').close()
     ###################################################################################### 
     
-    
-    
-    # for i in eval_subset: pinrt(i)
     len_eval = 0
     query_idx = -1
     for i in eval_subset:
-        print(">>> ENTERED LOOP", flush=True)
         query_idx += 1
         query_path = i['id']
         query_pose = positions_database[query_path]
@@ -246,8 +275,6 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
         len_eval += 1
         if cfg['DATA_CONFIG']['DATASET'] == "LHD_dataset" :
             is_revisit = 1 # LHD data are always revisited
- 
-        
         
         # Find top-1 candidate.
         nearest_idx = 0
@@ -257,20 +284,13 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
             prep_timer.tic()   
             input_data = data_collator(torch.utils.data.Subset(eval_subset,range(query_idx, query_idx+1))) 
             prep_timer.toc()
-
-
-            #input_data['pixel_values'] = torch.rand([1, 3, 224, 224]).to(device=input_data['pixel_values'].device)
-            x = model._make_gate_input(input_data['lidar_values'])
             
             ret_timer.tic()
             with torch.no_grad():
                 batch_beams_dict = model.generate_top1_V2(
-                        #pixel_values=None,
-                        #pixel_values=input_data['pixel_values'],
                         pixel_values=input_data['pixel_values'],
                         lidar_values=input_data['lidar_values'],
                         points=None,
-                        #points=inputs['lidar_values']['points'],
                         max_length=ID_MAX_LENGTH,
                         num_beams=num_beams,
                         num_return_sequences=num_beams,
@@ -278,7 +298,7 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
                         pad_token_id=0,
                         bos_token_id=2,
                         renormalize_logits=False,
-                        early_stopping=False, #True,#
+                        early_stopping=False,
                         prefix_allowed_tokens_fn=restrict_decode_vocab_v3,
                         return_dict_in_generate=True,                
                         output_scores = True,
@@ -286,55 +306,16 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
             ret_timer.toc()
             ##################################
             
-        
-            print("query_idx ", query_idx, query_path)
-            #continue
-            
             batch_beams = batch_beams_dict['sequences']
-
             seq_score = batch_beams_dict['sequences_scores'].reshape([-1, num_beams])
-            res = _pad_tensors_to_max_len(input_data['labels'], ID_MAX_LENGTH,tokenizer)
-            vv = tokenizer.batch_decode(input_data["labels"],skip_special_tokens=True)
-            ids = input_data['ids']
-            
             label_ids = tokenizer.batch_decode(batch_beams, skip_special_tokens=True)
+                             
             
-            print("label_ids ", label_ids)
-            
-            p_dist_mean = 0
-            p_dist_beam = 0
-    
-            
-            def load_json(file_path):
-                """Load JSON file safely and return data."""
-                with open(file_path, "r") as f:
-                    return json.load(f)
-            
-            def compute_distances(query_pose, place_candidates):
-                """Compute distances and return distance lists."""
-                p_dists = np.linalg.norm(query_pose - np.array(place_candidates), axis=1)
-                hits_clos = ['0' if x > 3 else '1' for x in p_dists]
-                return p_dists, hits_clos
 
-
-            """
-            # Load JSON files when needed
-            gps_data = load_json(sequence_path + "gps.json") if eval_set.labeltype == 'gps' else None
-            hilbert_data = load_json(sequence_path + "hilbert.json") if eval_set.labeltype == 'hilbert' else None
-            if eval_seq =="06":
-                hilbert_data = load_json(sequence_path + "hilbert_16.json") if eval_set.labeltype == 'hilbert' else None
-            """
-
-            def load_json(filepath):
-                with open(filepath, "r") as f:
-                    return json.load(f)
             
             # Process based on label type
             if eval_set.labeltype in ['gps', 'hilbert']:
-                #data = gps_data if eval_set.labeltype == 'gps' else hilbert_data
-                #nearest_ids = [data[label_id] for label_id in label_ids]
-
-                data = load_json(sequence_path + "/hilbert_12_pad.json")
+                data = load_json(sequence_path + "/hilbert_12_pad2.json")
                 nearest_ids = [data.get(label_id, -1) for label_id in label_ids]
                 nearest_idx = nearest_ids[0]
             
@@ -348,16 +329,15 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
             
             
             # Common processing logic
-            #place_candidate = seen_poses[int(nearest_idx)]
             if cfg['DATA_CONFIG']['DATASET'] == "LHD_dataset" :
-                #place_candidates = [positions_database[nearest_id] for nearest_id in nearest_ids]
                 place_candidates = [positions_database.get(nearest_id, [-10, -10]) for nearest_id in nearest_ids]
             else:
                 place_candidates = [seen_poses[int(nearest_id)] for nearest_id in nearest_ids]
             
             
             place_candidate = place_candidates[0]
-            
+            print("place_candidate ", place_candidate )
+            #import pdb; pdb.set_trace()
             
             # Compute distances
             if cfg['DATA_CONFIG']['DATASET'] == "LHD_dataset" :
@@ -373,10 +353,9 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
         if cfg['DATA_CONFIG']['DATASET'] == "LHD_dataset" :
             is_revisit = 1
         else:
-            is_revisit = is_revisit_list[key]
+            is_revisit = 0
         
         is_correct_loc = 0
-        is_correct_loc_beam = np.zeros(num_beams)
         
         ######################################################################################
         # Hitsscores only revisited (OG)
@@ -398,45 +377,9 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
             hit_at_10 += 1 
         ######################################################################################
     
-        def log_query_info(labeltype, query_idx, nearest_idx, nearest_ids, label_ids, is_revisit, is_correct_loc, p_dist, min_dist, eval_set):
-            """Logs query information based on labeltype."""
-            labeltype_mapping = {
-                #'hierarchical': ('id', eval_set.hierarchical_label.get(str(query_idx), 'N/A')),
-                #'gps': ('id', eval_set.label2gps(str(query_idx))) ,
-                'hilbert': ('id', eval_set.label2hilbert(str(eval_subset[query_idx]['id'])))
-            }
-        
-            if labeltype in labeltype_mapping:
-                label_name, query_label = labeltype_mapping[labeltype]
-                logging.info(
-                    f"{label_name}:{os.path.basename(str(eval_subset[query_idx]['id']))} {label_name}_val:{query_label} Top1_{labeltype}:{label_ids[0]} "
-                    f"Top1_id:{nearest_idx} is_rev:{is_revisit} -- loc_ok_1:{is_correct_loc} "
-                    f"p_dist:{p_dist:6.2f} min_dist:{min_dist:6.2f} "
-                )
-                
-                #logging.info(f"{label_name}:{os.path.basename(str(eval_subset[query_idx]['id']))} {label_name}_val:{query_label} TopN_{labeltype}:{label_ids} TopN_id:{nearest_ids} ")
-            else:
-                logging.info(
-                    f"id:{os.path.basename(str(eval_subset[query_idx]['id']))} n_id:{nearest_idx} is_rev:{is_revisit} -- loc_ok_1:{is_correct_loc} "
-                    f"p_dist:{p_dist:6.2f} min_dist:{min_dist:6.2f} "
-                )
 
-
-            ######################################################################################
-            if save_results:
-                with open(save_name, 'a') as f:
-                    f.write(json.dumps({
-                        "query_idx": int(query_idx),
-                        f"TopN_{labeltype}:": label_ids,
-                        "TopN_id": nearest_ids,
-                        "dist": p_dists.tolist(),     # convert to native float
-                        #"score": (-seq_score).cpu().numpy().tolist()[0]  # convert to native float
-                    }) + '\n')
-            ######################################################################################
-            return
 
         # Call the function
-        #log_query_info(eval_set.labeltype, query_idx, nearest_idx, nearest_ids, label_ids, is_revisit, is_correct_loc, p_dist, min_dist, eval_set)
         log_query_info(eval_set.labeltype, query_idx, nearest_idx, [x for x in nearest_ids], label_ids, is_revisit, is_correct_loc, p_dist, min_dist, eval_set)
         
 
@@ -447,11 +390,9 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
             "query_idx": query_idx,
             "Top10_id": nearest_ids,
             "dist": p_dists.tolist(),
-            #"score": (-seq_score).cpu().numpy().tolist()[0],
             "query_pose": query_pose,
             "place_candidate":place_candidate
         })
-
 
         
         if min_dist < min_min_dist:
@@ -459,38 +400,6 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
         if min_dist > max_min_dist:
             max_min_dist = min_dist
 
-
-        def Evaluate_top_1_candidate(num_thresholds, thresholds, min_dist, p_dist, revisit_criteria, not_revisit_criteria, is_revisit, num_true_positive, num_false_positive, num_true_negative, num_false_negative):
-            for thres_idx in range(num_thresholds):
-                threshold = thresholds[thres_idx]
-                
-                if(min_dist < threshold):  # Positive Prediction
-                    if p_dist <= revisit_criteria :
-                        num_true_positive[thres_idx] += 1
-                    elif p_dist > not_revisit_criteria:
-                        num_false_positive[thres_idx] += 1
-      
-                        
-                else:  # Negative Prediction
-                    if p_dist > revisit_criteria :
-                        num_true_negative[thres_idx] += 1
-                    elif p_dist <= not_revisit_criteria:
-                        num_false_negative[thres_idx] += 1
-            
-            
-            return num_true_positive, num_false_positive, num_true_negative, num_false_negative 
-    
-    
-        ######################################################################################
-        # classification binaire avec zones grises
-        # not_revisit_criteria = 20
-        #num_true_positive, num_false_positive, num_true_negative, num_false_negative = Evaluate_top_1_candidate(num_thresholds, thresholds, min_dist, p_dist, revisit_criteria, not_revisit_criteria, is_revisit, num_true_positive, num_false_positive, num_true_negative, num_false_negative)
-        ######################################################################################
-        # classification binaire sans zones grises
-        # not_revisit_criteria = revisit_criteria = 3
-        #num_true_positive_3m, num_false_positive_3m, num_true_negative_3m, num_false_negative_3m = Evaluate_top_1_candidate(num_thresholds, thresholds, min_dist, p_dist, revisit_criteria, revisit_criteria, is_revisit, num_true_positive_3m, num_false_positive_3m, num_true_negative_3m, num_false_negative_3m)
-    
-    
         # Evaluate top-1 candidate.
         for thres_idx in range(num_thresholds):
             threshold = thresholds[thres_idx]
@@ -512,7 +421,7 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
                     #name_false_negative[thres_idx].append({query_idx:nearest_idx}) 
     
     
-        ######################################################################################
+    ######################################################################################
         # classification binaire sans zones grises
         # Evaluate top-1 candidate.
         for thres_idx in range(num_thresholds):
@@ -609,7 +518,7 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
             num_correct_loc_all, hit_at_10, min_min_dist, max_min_dist, 
             F1max, best_metrics, prep_timer, ret_timer)
     
-        F1_thresh_id =best_metrics["F1_thresh_id"]
+        F1_thresh_id = best_metrics["F1_thresh_id"]
         
         if eval_set.labeltype == 'log3dnet' :
             checkpoint_dir = "/lustre/fswork/projects/rech/xhk/ufm44cu/checkpoints/logg3dnet"
@@ -630,27 +539,6 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
             eval_seq = str(eval_seq).split('/')[-1]
             plt.savefig(save_dir + '/' + eval_seq + '.png')
 
-    if save_descriptors:
-        save_dir = os.path.join(os.path.dirname(__file__), str(eval_seq))
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-        desc_file_name = '/logg3d_descriptor.pickle'
-        save_pickle(seen_descriptors, save_dir + desc_file_name)
-        feat_file_name = '/logg3d_feats.pickle'
-        save_pickle(seen_feats, save_dir + feat_file_name)
-
-    save_counts = False
-    if save_counts:
-        save_dir = os.path.join(checkpoint_dir, 'pickles/', str(eval_seq))
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-        save_pickle(num_true_positive, save_dir + '/num_true_positive.pickle')
-        save_pickle(num_false_positive, save_dir +
-                    '/num_false_positive.pickle')
-        save_pickle(num_true_negative, save_dir + '/num_true_negative.pickle')
-        save_pickle(num_false_negative, save_dir +
-                    '/num_false_negative.pickle')
-
     with open('results_dsi3d_moe_west_global.json', 'w') as f:
         json.dump(dictio_to_save, f)
     print("saved at results_dsi3d_moe_west_global.json")
@@ -666,7 +554,9 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
     list_true_negative = []
     list_false_negative = []
     
-    threshold = F1_thresh_id * 0.001 + 0.001
+    
+    F1_thresh_id = best_metrics["F1_thresh_id"]
+    threshold = thresholds[F1_thresh_id]
     
     for query_idx in range(len(dictio)):
         if(dictio[query_idx]["min_dist"] < threshold):  # Positive Prediction
@@ -707,20 +597,6 @@ def eval_log3dnet(model, eval_subset, eval_set, eval_indices, eval_loader, data_
                 for k in range(len(dict_to)): listr.append(dict_to[k][str(scor_key)])
                 print("std ", round(np.std(listr),round_num))
             count += 1
-
-
-    def compute_statistics(dict_to, key, round_num):
-        """
-        Compute and return statistics (mean, min, max, std) for a given key in the dictionary list.
-        """
-        values = [d[key] for d in dict_to]
-        stats = {
-            "mean": round(np.mean(values), round_num),
-            "min": round(min(values), round_num),
-            "max": round(max(values), round_num),
-            "std": round(np.std(values), round_num),
-        }
-        return stats
 
     # Class and corresponding lists
     print_class = ["TP", "FP", "FN", "TN"]

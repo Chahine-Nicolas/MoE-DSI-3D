@@ -1,72 +1,39 @@
+import os
 import _init_path
 import argparse
 import datetime
-import glob
-
-# Avoid tokenizers parallelism fork warning
-import os
-os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-
-
-
-from pathlib import Path
-from extern.log3dnet.SOP import SOP
-from collections import Counter
-from dataclasses import replace 
-import time
-import torch.distributed as dist
-#from torch.nn.parallel import DistributedDataParallel as DDP
-
-import hostlist
+import copy 
+import math
+import gc
+import json
 
 import torch
 import torch.nn as nn
-from tensorboardX import SummaryWriter 
-import copy 
-import traceback
-import logging
-
-from extern.pcdet.config import cfg, cfg_from_list, cfg_from_yaml_file, log_config_to_file
-from extern.pcdet.datasets import build_dataloader
-from extern.pcdet.utils import common_utils
-#from extern.train_utils.optimization import build_optimizer, build_scheduler
-#from extern.train_utils.train_utils import train_model
+import torch.nn.functional as F
 import numpy as np
 
-## Blip2
-import requests
-from PIL import Image
-from transformers import AutoProcessor,AutoModel, AutoConfig, AutoTokenizer, TrainingArguments , HfArgumentParser
-from extern.blip2.modeling_blip_2 import Blip2ModelQuerryLearning
-from extern.blip2.processing_blip_2 import Blip2Processor
-from transformers import BertTokenizer, BertModel,BertLMHeadModel,MT5Tokenizer
-from extern.blip2.modeling_bert_generation   import BertGenerationDecoder
-from transformers import  GPTQConfig
+from pathlib import Path
+from extern.log3dnet.SOP import SOP
+from dataclasses import replace 
+
+from extern.pcdet.config import cfg, cfg_from_yaml_file, log_config_to_file
+from extern.pcdet.datasets import build_dataloader
+from extern.pcdet.utils import common_utils
+
+from transformers import AutoProcessor, AutoConfig, AutoTokenizer, TrainingArguments , HfArgumentParser, TrainerCallback
 
 ## DSI QG
 from dataclasses import dataclass
 from transformers.trainer import Trainer
-from transformers import PreTrainedTokenizer, DataCollatorWithPadding,PretrainedConfig
+from transformers import DataCollatorWithPadding
 from typing import Dict, List, Tuple, Optional, Any, Union
-from transformers import   MT5ForConditionalGeneration
-from extern.git.modeling_git import GitModel,GitForCausalLM
-
-from evaluate_log3dnet_80_20 import eval_log3dnet
-#from evaluate_moe import eval_log3dnet
-#from evaluate_overfit import eval_overfit
-#from compute_hierarchical_index import compute_hierarchical_clustering
-
-import json
-from tqdm import tqdm
-import matplotlib.pyplot as plt
-from transformers import TrainerCallback
+from extern.git.modeling_git import GitForCausalLM
+from evaluate_moe import eval_log3dnet
 
 ##################################
 # read pos
-# #################################
+##################################
 from module_loader_kitti_pose import * # add for more metrics
-import math
-import gc
 
 WORK_PATH = os.getenv('WORKSF')
 
@@ -94,9 +61,6 @@ def get_pts_for_plot(query_idx,eval_seq,tfs,pose) :
     fname = kitti_dir + 'sequences/'+eval_seq+'/velodyne/'+'%06d' % query_idx + '.bin'
     #load points
     xyz = np.fromfile(fname, dtype=np.float32).reshape(-1, 4)
-    # every possible positions
-    x, z, y = pose[:,0], pose[:,1], pose[:,2]
-
     # rotation 1
     out = np.zeros((len(xyz), 3))
     mat = tfs[query_idx][:3,:3]
@@ -112,44 +76,19 @@ def get_pts_for_plot(query_idx,eval_seq,tfs,pose) :
     return xyzrf
     
 def print_loader(loader,lab) :
-    do_dump_image = False
     lit = iter(loader)
-
-    eval_seq = cfg['DATA_CONFIG']['SEQ']
-    kitti_dir = WORK_PATH+"/datas/datasets/"
     print("")
     print("=========  loader " + lab + " ===========")
     print("ln : " + str(len(loader)))
     acc = 0
     os.makedirs("plot_" + lab, exist_ok=True)
-    sequence_path = kitti_dir + 'sequences/' + eval_seq + '/'
-    #tfs, pose = load_poses_from_txt(sequence_path + 'poses.txt')
     for ii in lit :
         print("id:" + str(ii['id']) + " gt:" + str(ii['gt']) + " labels:" + str(ii['labels']) ) #+ " gps_label:" + str(ii['gps']))
         acc = acc+1
-
-        if do_dump_image : 
-            xyzrf = get_pts_for_plot(int(ii['id']),eval_seq,tfs,pose)
-            if int(ii['gt']) > 0:
-                xyzrf_gt = get_pts_for_plot(int(ii['gt']),eval_seq,tfs,pose)
-            x, z, y = pose[:,0], pose[:,1], pose[:,2]
-            plt.figure()
-            plt.scatter(xyzrf[:, 0], xyzrf[:, 2], c='b', s=0.05,marker='x')
-            if int(ii['gt']) > 0:
-                plt.scatter(xyzrf_gt[:, 0], xyzrf_gt[:, 2], c='r', s=0.05,marker='o')
-            plt.scatter(x,z,c='g', s=0.1)
-            plt.xlabel("X")
-            plt.ylabel("z")
-            plt.title("query "+str(ii['id']) )
-            plt.axis('equal')
-            plt.savefig('plot_' + lab + '/query_'+str(ii['id']) +'.png',dpi=600)
-        
-
         if(acc > 64) :
             print("....")
             break
     print("========= end loader ===========")
-
 
 def load_data_to_gpu(batch_dict):
     for key, val in batch_dict.items():
