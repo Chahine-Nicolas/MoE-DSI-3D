@@ -19,28 +19,20 @@
 import math
 import os
 import os.path
-from dataclasses import dataclass
-from typing import List, Optional, Tuple, Union
 import random 
-from torch.nn import functional as F
 import torch
 import torch.utils.checkpoint
+
 from torch import nn
 from torch.nn import CrossEntropyLoss
-import numpy as np
 from transformers.activations import ACT2FN
 from transformers.file_utils import ModelOutput
-from transformers.modeling_outputs import (
-    BaseModelOutput,
-    BaseModelOutputWithPast,
-    BaseModelOutputWithPooling,
-    CausalLMOutputWithPast,
-)
+from transformers.modeling_outputs import (BaseModelOutput,BaseModelOutputWithPast,BaseModelOutputWithPooling,CausalLMOutputWithPast,)
 from transformers.modeling_utils import PreTrainedModel
 from transformers.pytorch_utils import apply_chunking_to_forward, find_pruneable_heads_and_indices, prune_linear_layer
 from transformers.utils import add_start_docstrings, add_start_docstrings_to_model_forward, logging, replace_return_docstrings
-from .configuration_git import GitConfig, GitVisionConfig
-from pathlib import Path
+from dataclasses import dataclass
+from typing import List, Optional, Tuple, Union
 
 logger = logging.get_logger(__name__)
 
@@ -765,7 +757,7 @@ class GitLidarModel(GitPreTrainedModel):
     def get_input_embeddings(self) -> nn.Module:
         return self.vision_model.embeddings.patch_embedding
 
-
+    """
     def voxel_sop(self,ret_dict) :
         lid_mask = ret_dict['voxel_mae_mask']
         bb_filter = lid_mask!=0
@@ -775,7 +767,6 @@ class GitLidarModel(GitPreTrainedModel):
         max_len = torch.bincount(vox_coords[:,0]).max().item()
         lid_feat_vec = None
         lid_mask_vec = None
-
 
         for ii in range(batch_size) :
             bm = vox_coords[:,0] == ii
@@ -794,8 +785,7 @@ class GitLidarModel(GitPreTrainedModel):
                 lid_mask_vec = torch.cat([lid_mask_vec,target_mask[None,:]])
 
         return self.sop(lid_feat_vec)
-
-
+    """
 
     def save_tensor(self,xx,nn,lab) :
         acc = 0
@@ -857,23 +847,13 @@ class GitLidarModel(GitPreTrainedModel):
         # load desc from loggnet
         ##################################################################################    
         desc_from_logg = False 
-        #desc_from_logg = True
          
         if desc_from_logg == False:
-            #nn = lidar_values[input_mod][:,1] # change 'frame_id' to input_mod
-            
-            #nn = lidar_values[input_mod][0]
-            #xx_sop_log3d = self.load_tensor_just_one(nn,"logg_desc") 
-            #xx_sop_log3d = lidar_values[input_mod+'_desc'][0]
             xx_final_ori = lidar_values[input_mod+'_desc'][0]
         else:
             print("todo")
             # todo , call logg3dnet.py
             xx_sop_log3d = output_desc_computed.reshape([1, -1]) 
-        
-        #xx_final_ori = xx_sop_log3d.unsqueeze(1).to(dtype=torch.float32)
-        #del xx_sop_log3d
-
 
         ##################################################################################  
         # desc dim 256 to 768
@@ -1581,7 +1561,7 @@ class GitForCausalLM(GitPreTrainedModel):
 
         if not return_dict:
             output = (logits,) + outputs[1:]
-            return ((loss,) + output) if loss is not None else output
+            return ((loss_tot,) + output) if loss_tot is not None else output
 
         
         return CausalLMOutputWithPast(
