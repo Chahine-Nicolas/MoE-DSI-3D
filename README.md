@@ -134,18 +134,8 @@ python Gate_trainer.py --list_seq A1 B1 C1 D1 E1 --root_path "../data/lidarhd_v3
 
 # MoE-DSI-3D evaluation
 
+in kitti_lhd_hilbert.yaml set DATA_PATH to the dataset folder and then :
 
-in kitti_lhd_hilbert.yaml set DATA_PATH to lidarhd_v2 then :
 ```highlight
-sbatch job_eval_lhd_moe_east.slurm
-```
-
-in kitti_lhd_hilbert.yaml set DATA_PATH to lidarhd_v3 then :
-```highlight
-sbatch job_eval_lhd_moe_west.slurm
-```
-
-in kitti_lhd_hilbert.yaml set DATA_PATH to lidarhd_v4 then :
-```highlight
-sbatch job_eval_lhd_moe_east_west.slurm
+source run_eval_moe.sh
 ```
