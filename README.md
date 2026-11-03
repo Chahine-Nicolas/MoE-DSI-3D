@@ -81,6 +81,29 @@ Fine-tuned LoGG3D-Net on **LiDAR HD**.
 Tokenizer vocabulary optimized for Hilbert-curve indexing of LiDAR HD.
 - `transformers_vocab.zip`
 
+# Installation
+
+
+```bash
+conda create -y -n MOE_DSI_3D python=3.10
+conda activate MOE_DSI_3D
+```
+
+```bash
+conda install -y pytorch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 pytorch-cuda=11.8 -c pytorch -c nvidia
+```
+
+```bash
+pip install -r requirements.txt
+```
+
+```bash
+pip install torch-scatter==2.1.1 -f https://data.pyg.org/whl/torch-2.0.1+cu118.html
+```
+
+```bash
+python -c "import torch; print('PyTorch:', torch.__version__); print('CUDA:', torch.version.cuda); print('CUDA available:', torch.cuda.is_available())"
+```
 
 # Experts training
 Set the path to your dataset in kitti_lhd_hilbert.yaml
