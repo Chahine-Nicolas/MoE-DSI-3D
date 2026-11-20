@@ -291,7 +291,6 @@ class DSITrainer(Trainer):
         
         model.eval()
         
-        #vv = self.tokenizer.batch_decode(inputs["labels"],skip_special_tokens=True)
         self.ll1 = []
 
         with torch.no_grad():
@@ -310,14 +309,14 @@ class DSITrainer(Trainer):
                 pixel_values=inputs['pixel_values'],
                 lidar_values=inputs['lidar_values'],
                 points=None,
-                max_length= self.id_max_length, #8
-                num_beams=nb_beam, #8
-                num_return_sequences=nb_beam, #8
-                eos_token_id=self.tokenizer.eos_token_id, #102
-                pad_token_id=self.tokenizer.pad_token_id, #0
-                bos_token_id=self.tokenizer.bos_token_id, #101
+                max_length= self.id_max_length,
+                num_beams=nb_beam,
+                num_return_sequences=nb_beam,
+                eos_token_id=self.tokenizer.eos_token_id,
+                pad_token_id=self.tokenizer.pad_token_id,
+                bos_token_id=self.tokenizer.bos_token_id,
                 renormalize_logits=True,
-                early_stopping=False, #True,
+                early_stopping=False,
                 prefix_allowed_tokens_fn=self.restrict_decode_vocab,
                 return_dict_in_generate=True,                
                 output_scores = True,

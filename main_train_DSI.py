@@ -298,11 +298,9 @@ class DSITrainer(Trainer):
             ignore_keys: Optional[List[str]] = None,
     ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor]]:
         
-        
         model.eval()
-        #model.half()
         
-        vv = self.tokenizer.batch_decode(inputs["labels"],skip_special_tokens=True)
+        #vv = self.tokenizer.batch_decode(inputs["labels"],skip_special_tokens=True)
         self.ll1 = []
 
         with torch.no_grad():
@@ -512,10 +510,73 @@ def Print_active_layers_git(args, logger, model_dsi, model_name):
     return
 
 
+def initialize_dataloader(cfg, args, logger, training=True):
+    dataset, loader, sampler = build_dataloader(
+        dataset_cfg=cfg.DATA_CONFIG,
+        class_names=cfg.CLASS_NAMES,
+        batch_size=args.batch_size,
+        dist=(args.launcher != 'none'),
+        workers=args.workers,
+        logger=logger,
+        training=training,
+        merge_all_iters_to_one_epoch=args.merge_all_iters_to_one_epoch,
+        total_epochs=args.epochs,
+    )
+    return dataset, loader, sampler
 
 
+def load_json(filepath):
+    with open(filepath, "r") as f:
+        return json.load(f)
 
+"""
+def restrict_decode_vocab(batch_idx, prefix_beam):
+    TOK_ID_OK = []
+    sz = len(prefix_beam)
+    pfb = prefix_beam.cpu().numpy()
+    for tt in LIK :
+        if tt[:sz] == pfb.tolist()  :
+            TOK_ID_OK.append(tt[sz])
+    if len(TOK_ID_OK) == 0 :
+        TOK_ID_OK.append(102)
+    return TOK_ID_OK
+"""
 
+def build_prefix_dict(LIK, tokenizer):
+    prefix_dict = {}
+    for seq in LIK:
+        for sz in range(len(seq) - 1):
+            prefix = tuple(seq[:sz])  
+            next_token = seq[sz]
+            if prefix in prefix_dict:
+                prefix_dict[prefix].add(next_token) 
+            else:
+                prefix_dict[prefix] = {next_token}  
+    return {k: list(v) for k, v in prefix_dict.items()}
+
+"""
+def build_prefix_dict_filter(LIK):
+    prefix_dict = {}
+    skip_eval_set = 0
+    for seq in LIK: # len trainset
+        if skip_eval_set % 5 == 0:
+            skip_eval_set += 1
+            continue
+        skip_eval_set += 1
+        for sz in range(len(seq) - 1): # length tokens
+            prefix = tuple(seq[:sz])  
+            next_token = seq[sz]  # The next token
+            
+            if prefix in prefix_dict:
+                prefix_dict[prefix].add(next_token) 
+            else:
+                prefix_dict[prefix] = {next_token}  
+    return {k: list(v) for k, v in prefix_dict.items()}  # Convert sets to lists
+"""
+
+def restrict_decode_vocab_v3(batch_idx, prefix_beam, prefix_dict):
+    pfb = tuple(prefix_beam.cpu().numpy())  
+    return prefix_dict.get(pfb, [3])   
 
 def main():
     ### ===== START ===========
@@ -524,16 +585,10 @@ def main():
 
     args, cfg = parse_config()
     ID_MAX_LENGTH = args.id_max_length 
-    MAX_LENGTH = ID_MAX_LENGTH
-
+    
     model_name = args.model_name
-    dataset_train_len = args.dataset_train_len
-    
-    dataset_eval_len = args.dataset_eval_len
-
     checkp_to_eval = args.eval_chkt
-    
-    do_overfit = True
+
     random_seed = int(args.fix_random_seed)
     do_use_sop = eval(args.use_sop)
     if args.launcher == "pytorch" : 
@@ -565,7 +620,6 @@ def main():
 
 
     ## GD-MAE parser
-    #training_args.train_batch_size = batch_size
     if args.launcher == 'none':
         dist_train = False
         total_gpus = 1
@@ -618,19 +672,6 @@ def main():
     ### ===== DATALOADER ===========
     # -----------------------create dataloader & network & optimizer---------------------------
 
-    def initialize_dataloader(cfg, args, logger, training=True):
-        dataset, loader, sampler = build_dataloader(
-            dataset_cfg=cfg.DATA_CONFIG,
-            class_names=cfg.CLASS_NAMES,
-            batch_size=args.batch_size,
-            dist=(args.launcher != 'none'),
-            workers=args.workers,
-            logger=logger,
-            training=training,
-            merge_all_iters_to_one_epoch=args.merge_all_iters_to_one_epoch,
-            total_epochs=args.epochs,
-        )
-        return dataset, loader, sampler
 
     if args.local_rank == 0 :
         logger.info("Initializing dataset and dataloader...")
@@ -662,14 +703,16 @@ def main():
         train_subset = torch.utils.data.Subset(train_set, range(0, train_len))
     eval_subset = torch.utils.data.Subset(eval_set, range(0, eval_len))
     
+    
+    
     # Log dataset information
     if do_train: 
         print_loader(train_subset, 'train')
     print_loader(eval_subset, 'eval')
         
     ### ========= build Models ===========
-    work_path = os.getenv('WORKSF')
 
+    work_path = "/mnt/c/Users/chahi/Desktop/these/code/these/code/DSI_LIDAR_HD/"
     model_paths = {
         "git_base": os.path.join(work_path, "datas/transformers/git-base-lhd"),
         "git_large": os.path.join(work_path, "datas/transformers/git-large-coco"),
@@ -685,7 +728,7 @@ def main():
     ##############################################################################
     # device
     device = "cuda" if torch.cuda.is_available() else "cpu"
-
+    """
     model_dsi = None
     tokenizer = None
     
@@ -712,49 +755,69 @@ def main():
             lidar_projection = copy.deepcopy(model_dsi.lidar_encoder.lidar_projection)
             model_dsi.set_input_embeddings(input_embeddings)
             model_dsi.set_output_embeddings(output_embeddings)
-            model_dsi.lidar_model.set_lidar_encoder(model, lidar_projection, bt_norm)
+            model_dsi.lidar_encoder.set_lidar_encoder(model, lidar_projection, bt_norm)
 
-    elif model_name == "blip2":
-        model_dsi_path = model_paths["blip2"]
-        if args.local_rank == 0 :
-            logger.info(f"Initializing BLIP2 model from {model_dsi_path}...")
-    
-        # Load BLIP2 configuration and model
-        config = AutoConfig.from_pretrained(model_dsi_path)
-        model_dsi = Blip2ModelQuerryLearning(config=config).to(device=device).type(torch.float32)
-        tokenizer = AutoTokenizer.from_pretrained(model_paths["bert_base"])
         
-        # Reset BLIP2 parameters if specified
-        if args.reset_model:
-            if args.local_rank == 0 :
-                logger.info("Resetting BLIP2 Q-former and weights...")
-            model_dsi.reset_q()
-            try:
-                model_dsi.qformer.apply(weight_reset)
-            except Exception as e:
-                logger.error(f"Failed to reset Q-former weights: {traceback.format_exc()}")
-        
+        import pdb; pdb.set_trace()
         # Set lidar model with SOP
         model_sop = SOP(signed_sqrt=False, do_fc=False)
-        model_dsi.lidar_model.sop = model_sop
+        #model_dsi.lidar_model.sop = model_sop
+        model_dsi.lidar_encoder.sop = model_sop
         if args.git_checkpoint:
             if args.local_rank == 0 :
                 logger.info("Restoring BLIP2 input/output embeddings and lidar parameters...")
             model_dsi.set_input_embeddings(model_dsi.bert.embeddings, input_embeddings)
             model_dsi.set_output_embeddings(output_embeddings)
-            model_dsi.lidar_model.set_lidar_encoder(model, lidar_projection, bt_norm)
+            model_dsi.lidar_encoder.set_lidar_encoder(model, lidar_projection, bt_norm)
         else:
-            model_dsi.lidar_model.set_lidar_model(model, model_sop, do_use_sop, eval_set.root_path)
+            model_dsi.lidar_encoder.set_lidar_model(model, model_sop, do_use_sop, eval_set.root_path)
     
     else:
         logger.error(f"Unsupported model name: {model_name}. Must be 'git' or 'blip2'.")
+    """
+    
+        
+    model_dsi = None
+    tokenizer = None
+    
+    if model_name == "git" or args.git_checkpoint is not None:
+        model_dsi_path = (
+            args.git_checkpoint
+            if args.git_checkpoint
+            else model_paths["git_base"]
+        )
+    
+        if args.local_rank == 0:
+            logger.info(f"Initializing GIT model from {model_dsi_path}...")
+    
+        config = AutoConfig.from_pretrained(model_dsi_path)
+        model_dsi = GitForCausalLM(config).to(device=device)
+        tokenizer = AutoTokenizer.from_pretrained(model_dsi_path)
+    
+        model = None
+        model_sop = SOP(signed_sqrt=False, do_fc=False)
+    
+        # Correct: call the method on GitForCausalLM
+        model_dsi.set_lidar_model(
+            model,
+            model_sop,
+            do_use_sop,
+            eval_set.root_path,
+        )
+    
+    else:
+        logger.error(
+            f"Unsupported model name: {model_name}. Must be 'git' or 'blip2'."
+        )
+
+    
     ##############################################################################
     ##############################################################################
 
     ### ===== Processor / Tokenizer =====
     processor = AutoProcessor.from_pretrained(model_dsi_path)
-    spe_tok = ['[CLS]', '[MASK]', '[PAD]', '[SEP]','[BOS]','[EOS]']
-    ukn = tokenizer.convert_tokens_to_ids('[UNK]') # = 100
+    #spe_tok = ['[CLS]', '[MASK]', '[PAD]', '[SEP]','[BOS]','[EOS]']
+    #ukn = tokenizer.convert_tokens_to_ids('[UNK]') # = 100
     """
     tokenizer.bos_token_id = tokenizer.convert_tokens_to_ids(tokenizer.bos_token) # ' '
     tokenizer.eos_token_id = tokenizer.convert_tokens_to_ids(tokenizer.eos_token) # ' '
@@ -770,8 +833,8 @@ def main():
     tokenizer.unk_token = '[UNK]'
     tokenizer.cls_token = '<s>' #'[CLS]'
     tokenizer.mask_token = '[MASK]'
-    tokenizer.bos_token_id = tokenizer.convert_tokens_to_ids('<s>')  # should be 101
-    tokenizer.eos_token_id = tokenizer.convert_tokens_to_ids('</s>')  # should be 102
+    tokenizer.bos_token_id = tokenizer.convert_tokens_to_ids('<s>')
+    tokenizer.eos_token_id = tokenizer.convert_tokens_to_ids('</s>')
 
 
     
@@ -821,29 +884,22 @@ def main():
     ############################################################
     # create ID and token lists
     n_subset = [int(x) for x in range(len(eval_subset))] 
-    n_set = [int(x) for x in range(len(eval_set))] 
     lid = []
     LIK = []
-    for ii in n_subset : lid.append(eval_set.get_label(ii))    
-
-    # new
-    def load_json(filepath):
-        with open(filepath, "r") as f:
-            return json.load(f)
-    lid = load_json(sequence_path + "/hilbert_12_pad.json") 
-    #lid = load_json(sequence_path + "/hilbert_p20_extd.json") 
     
+    # for ii in n_subset : lid.append(eval_set.get_label(ii))    
+        
+    lid = load_json(sequence_path + "/hilbert_12_pad.json")     
     lid = lid.keys()   
     for ii in lid : LIK.append(tokenizer(ii,padding="max_length",max_length=ID_MAX_LENGTH).input_ids)
 
     print("len lik", len(LIK), LIK[0])
     lid2 = list(lid)
-    print("lid2[0]", lid2[0])
+    
     ids = tokenizer(lid2[0], padding="max_length", max_length=ID_MAX_LENGTH).input_ids
     decoded = tokenizer.batch_decode([ids], skip_special_tokens=True)[0].replace(" ", "")
-    print("decoded ", decoded)
 
-    # find max usefull token
+
     end_of_string_tok = tokenizer.eos_token_id
     sep_indices = [lst.index(end_of_string_tok) for lst in LIK if end_of_string_tok in lst]
     max_sep_index = max(sep_indices)
@@ -855,68 +911,11 @@ def main():
     #model_dsi.set_vocab(INT_TOKEN_IDS) 
     
     #tokenizer.decode(, skip_special_tokens=True)
-
-    def restrict_decode_vocab(batch_idx, prefix_beam):
-        TOK_ID_OK = []
-        sz = len(prefix_beam)
-        pfb = prefix_beam.cpu().numpy()
-
-
-        for tt in LIK :
-            #print("tt[:sz] ",tt[:sz], " pfb.tolist() ", pfb.tolist())
-            if tt[:sz] == pfb.tolist()  :
-                TOK_ID_OK.append(tt[sz])
-        #print("tok:" + str(TOK_ID_OK))
-        if len(TOK_ID_OK) == 0 :
-            TOK_ID_OK.append(102)
-        return TOK_ID_OK
-    ############################################################
-
-    ############################################################
-    
-    # Build Prefix Lookup Dictionary for O(1) Lookup
-    def build_prefix_dict(LIK, tokenizer):
-        prefix_dict = {}
-        for seq in LIK: # len trainset
-            #tokenizer.decode(seq, skip_special_tokens=True)
-
-            for sz in range(len(seq) - 1): # length tokens
-                prefix = tuple(seq[:sz])  
-                next_token = seq[sz]  # The next token
-                
-                if prefix in prefix_dict:
-                    prefix_dict[prefix].add(next_token) 
-                else:
-                    prefix_dict[prefix] = {next_token}  
-        return {k: list(v) for k, v in prefix_dict.items()}  # Convert sets to lists
-
-
-    def build_prefix_dict_filter(LIK):
-        prefix_dict = {}
-        skip_eval_set = 0
-        for seq in LIK: # len trainset
-            if skip_eval_set % 5 == 0:
-                skip_eval_set += 1
-                continue
-            skip_eval_set += 1
-            for sz in range(len(seq) - 1): # length tokens
-                prefix = tuple(seq[:sz])  
-                next_token = seq[sz]  # The next token
-                
-                if prefix in prefix_dict:
-                    prefix_dict[prefix].add(next_token) 
-                else:
-                    prefix_dict[prefix] = {next_token}  
-        return {k: list(v) for k, v in prefix_dict.items()}  # Convert sets to lists
-
     
     n_subset = [int(x) for x in range(len(eval_subset))] 
     lid = [eval_set.get_label(ii) for ii in n_subset]
 
-        # new
-    def load_json(filepath):
-        with open(filepath, "r") as f:
-            return json.load(f)
+
     lid = load_json(sequence_path + "/hilbert_12_pad.json")
     #lid = load_json(sequence_path + "/hilbert_p20_extd.json")
     
@@ -929,19 +928,7 @@ def main():
     #prefix_dict = build_prefix_dict_filter(LIK)
 
     # Optimized restrict_decode_vocab
-    def restrict_decode_vocab_v3(batch_idx, prefix_beam):
-        pfb = tuple(prefix_beam.cpu().numpy())  
-        #return prefix_dict.get(pfb, [102])
-        return prefix_dict.get(pfb, [3])
 
-
-
-    
-    # restrict code version DSI
-    
-    #def restrict_decode_vocab_v2(batch_idx, prefix_beam): #
-        #return INT_TOKEN_IDS
-    
 
     #update object
     if do_train: 
@@ -963,14 +950,10 @@ def main():
         batch_size=args.batch_size) # = dict with 
 
 
-    
-    ### ====== Freezing Model =========
-    ## Freeze network
-    #model.freeze(model.model_cfg.FREEZE_LAYERS) # lidar_model
-    if True : 
-        if args.local_rank == 0 :
-            logger.info("============== FULL NETWORK STATE =================")
-        for name, param in model_dsi.named_parameters() : logger.info(name + "\t =>" + str(param.requires_grad)) 
+    if args.local_rank == 0 :
+        logger.info("============== FULL NETWORK STATE =================")
+    for name, param in model_dsi.named_parameters() : logger.info(name + "\t =>" + str(param.requires_grad)) 
+
     if args.local_rank == 0 :
         logger.info("============== FREE NETWORK STATE =================")
 
@@ -980,13 +963,15 @@ def main():
         logger.info("============== NETWORK STATE =================")
 
     ### ====== checkpoint =========
-    work_path = os.getenv('WORK')
-    CHECK_ROOT= work_path + "/checkpoints/"
+    #CHECK_ROOT= work_path + "/checkpoints/"
+    CHECK_ROOT= "/mnt/c/Users/chahi/Desktop/these/code/temp/checkpoints/"
     checkpoint_dir = CHECK_ROOT + "/" + model_name + "_" + eval_set.labeltype + "_" + args.extra_tag
     #checkpoint_dir = CHECK_ROOT + eval_set.labeltype + "_" + args.extra_tag
     if not os.path.isdir(checkpoint_dir) :
         Path(checkpoint_dir).mkdir(parents=True, exist_ok=True)
-
+        
+    import pdb; pdb.set_trace()
+    
     if do_train:
         if cfg['DATA_CONFIG']['DATASET'] == "LHD_dataset":
             is_training = False
@@ -1001,10 +986,8 @@ def main():
                 val_indices_path = "id_dsi_val_list.json"
                 
             
-            
             print("train_indices_path ", train_indices_path)
             print("val_indices_path ", val_indices_path)
-            #f = open(path[:-4] + "id_dsi_train_list.json") 
             f = open(sequence_path +"/"+ train_indices_path) 
             train_indices = json.load(f)
             f.close()
@@ -1023,13 +1006,7 @@ def main():
                     train_indices.append(query_idx)
                 elif query_idx % 10 != 0:  # 10% for validation
                     val_indices.append(query_idx)
-                              
-        
-        # Preload required data for compute metrics only one time 
-        def load_json(filepath):
-            with open(filepath, "r") as f:
-                return json.load(f)
-        
+
         label_mapping = {}
         label_mapping_val = {}
         if args.local_rank == 0 :
@@ -1037,17 +1014,10 @@ def main():
         if train_set.labeltype in {"gps", "hierarchical", "hilbert"}:
             # label_mapping = load_json(sequence_path + f"/{train_set.labeltype}.json")
             
-            label_mapping = load_json(sequence_path + "/hilbert_12_pad.json")
-            label_mapping_val = load_json(sequence_path + "/hilbert_12_pad_val.json")
+            label_mapping = load_json(sequence_path + "/hilbert_12_pad2.json")
+            label_mapping_val = load_json(sequence_path + "/hilbert_12_pad_val2.json")
             
-            print("label_mapping_path ", sequence_path + "/hilbert_12_pad_val.json")
-
-            """
-            label_mapping = load_json(sequence_path + "/hilbert_p20_extd.json")
-            label_mapping_val = load_json(sequence_path + "/hilbert_p20_extd.json")
-            print("label_mapping_path ", sequence_path + "/hilbert_p20_extd.json")
-            """
-            
+            print("label_mapping_path ", sequence_path + "/hilbert_12_pad_val2.json")            
             print("len(label_mapping)", len(label_mapping))
 
 
@@ -1056,9 +1026,6 @@ def main():
 
         print("len(set(lid)) " ,len(set(lid))) # 20900
         print("len(label_mapping.keys()) ", len(label_mapping.keys()))  # 20892
-        print("diff ", set(lid).difference(label_mapping.keys())  )  #{'03056', '54175', '04577', '04451', '33475', '07829', '03130', '54142'}
-
-
 
         
         train_subset = torch.utils.data.Subset(train_set, train_indices)
@@ -1129,6 +1096,7 @@ def main():
                 id_max_length=ID_MAX_LENGTH
             ) 
 
+        import pdb; pdb.set_trace()
         if not os.path.isdir(previous_model_path) :
             if args.local_rank == 0 :
                 print("train from scratch : ")

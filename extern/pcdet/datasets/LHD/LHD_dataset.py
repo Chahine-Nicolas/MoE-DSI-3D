@@ -68,17 +68,9 @@ class LHD_dataset(DatasetTemplate,DSIDatasets):
         Loads positive and negative sequences for contrastive learning.
         """
         tuple_dir = self.root_path
-        #lhd_pos_json = f'positive_sequence_D-{revisit_criteria}_T-{skip_time}.json'
-        #lhd_neg_json = f'positive_sequence_D-{revisit_criteria_extended}_T-{skip_time}.json'
-        
-        #lhd_pos_json = 'dict_hardest_pos.json'
-        #lhd_neg_json = 'revisits_lidar_full_train_list.json'
-
-        #lhd_pos_json = 'dsi_revisits_lhd_1m.json'
         lhd_pos_json = 'dsi_revisits_lhd_itself.json' 
-        lhd_neg_json = 'dsi_revisits_lhd_59mt.json'
+        #lhd_neg_json = 'dsi_revisits_lhd_59mt.json'
         lhd_neg_json = 'dsi_revisits_lhd_itself.json'
-        
 
         self.dict_3m = json.load(open(tuple_dir / lhd_pos_json, "r"))
         self.dict_20m = json.load(open(tuple_dir / lhd_neg_json, "r"))  #define negative distance threshold
@@ -93,10 +85,7 @@ class LHD_dataset(DatasetTemplate,DSIDatasets):
         fnames = json.load(f)
         f.close()
         
-        # print("before load ", str(self.root_path) + '/bin/*.bin')
-        #inames = sorted(os.path.split(fname)[-1][:-4] for fname in fnames)
         inames = sorted(fnames)
-
 
         #f = open(str(self.root_path) + "/zone_A_dsi_train_list.json") 
         f = open(str(self.root_path) + "/dsi_train_list.json") 
@@ -188,7 +177,6 @@ class LHD_dataset(DatasetTemplate,DSIDatasets):
         
         # classic negatives
         all_ids = set(inames)
-        #sq = self.dict_20m
         if index in self.dict_20m:
             neg_set_inv = set(self.dict_20m[index])
         else:
@@ -199,15 +187,7 @@ class LHD_dataset(DatasetTemplate,DSIDatasets):
         negatives = list(neg_set)
         if index in negatives and False:
             negatives.remove(index)
-        """
-        sq = self.dict_20m
-        if index in sq:
-            negatives = sq[index]
-            if index in negatives and False:
-                negatives.remove(index)
-        else:
-            negatives = [index]
-         """
+
         return negatives
 
     def get_other_negative(self, drive_id, query_id, sel_positive_ids, sel_negative_ids, inames):
@@ -259,15 +239,10 @@ class LHD_dataset(DatasetTemplate,DSIDatasets):
         path_split = str(lidar_path).split('/')
     
         input_dict = {'frame_id': path_split[0][:-4]}
-        
         input_dict['frame_id_desc'] = self.load_tensor_just_one(input_dict['frame_id'],"descriptor").unsqueeze(1).to(dtype=torch.float32)
 
         ### Contrastive
-        #main_id = self.get_id(index)
-        
         drive_id, query_id, positive_ids, negative_ids = self.files[index]
-
-        # drive_id, query_id, positive_ids, negative_ids[0]
 
         # Select contrastive samples
         sel_positive_ids = random.sample(positive_ids, min(len(positive_ids), 1))
@@ -308,12 +283,9 @@ class LHD_dataset(DatasetTemplate,DSIDatasets):
             input_dict.update(self.get_dict_dsi(index))  # Merge dictionaries
 
             # Extract LiDAR values for `lidar_values`
-              # Initialize dictionary
+            # Initialize dictionary
             
             lidar_values = {}
-            #lidar_values['batch_size'] = 1
-            #lidar_values['points'] = torch.tensor(input_dict['points'], dtype=torch.float32) 
-            
             
             # Tokenization (if applicable)
             if self.tokenizer:
